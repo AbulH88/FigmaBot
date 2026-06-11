@@ -67,10 +67,13 @@ function renderProxies() {
     proxyList.innerHTML = '';
     proxies.forEach((p, idx) => {
         const li = document.createElement('li');
-        li.innerHTML = `
-            <span>${p}</span>
-            <span class="proxy-status pending" id="proxy-status-${idx}">Pending</span>
-        `;
+        const addrSpan = document.createElement('span');
+        addrSpan.textContent = p;
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'proxy-status pending';
+        statusSpan.id = `proxy-status-${idx}`;
+        statusSpan.textContent = 'Pending';
+        li.append(addrSpan, statusSpan);
         proxyList.appendChild(li);
     });
 }
@@ -200,26 +203,41 @@ async function loadAccounts() {
         const accounts = await res.json();
         accountsBody.innerHTML = '';
         if (accounts.length === 0) {
-            accountsBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No accounts generated yet.</td></tr>';
+            accountsBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No accounts generated yet.</td></tr>';
             return;
         }
-        
+
         accounts.forEach(acc => {
             const tr = document.createElement('tr');
             let statusClass = 'pending';
             if (acc.STATUS && acc.STATUS.includes('Failed')) statusClass = 'bad';
             else if (acc.STATUS && acc.STATUS.includes('Verified')) statusClass = 'good';
-            
-            tr.innerHTML = `
-                <td>${acc.EMAIL || '-'}</td>
-                <td style="font-family: monospace;">${acc.PASSWORD || '-'}</td>
-                <td><span class="proxy-status ${statusClass}">${acc.STATUS || 'Pending'}</span></td>
-                <td><button class="btn btn-danger btn-sm" onclick="deleteAccount('${acc.EMAIL}')">Delete</button></td>
-            `;
+
+            const tdEmail = document.createElement('td');
+            tdEmail.textContent = acc.EMAIL || '-';
+
+            const tdPassword = document.createElement('td');
+            tdPassword.style.fontFamily = 'monospace';
+            tdPassword.textContent = acc.PASSWORD || '-';
+
+            const tdStatus = document.createElement('td');
+            const statusSpan = document.createElement('span');
+            statusSpan.className = `proxy-status ${statusClass}`;
+            statusSpan.textContent = acc.STATUS || 'Pending';
+            tdStatus.appendChild(statusSpan);
+
+            const tdAction = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn-danger btn-sm';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', () => deleteAccount(acc.EMAIL));
+            tdAction.appendChild(delBtn);
+
+            tr.append(tdEmail, tdPassword, tdStatus, tdAction);
             accountsBody.appendChild(tr);
         });
     } catch (e) {
-        accountsBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--danger);">Failed to load accounts.</td></tr>';
+        accountsBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger);">Failed to load accounts.</td></tr>';
     }
 }
 

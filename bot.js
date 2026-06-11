@@ -6,20 +6,26 @@ chromium.use(stealth);
 const axios = require('axios');
 const imaps = require('imap-simple');
 const simpleParser = require('mailparser').simpleParser;
-const { createObjectCsvWriter } = require('csv-writer');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const csvWriter = createObjectCsvWriter({
-    path: 'accounts.csv',
-    header: [
-        { id: 'email', title: 'EMAIL' },
-        { id: 'password', title: 'PASSWORD' },
-        { id: 'status', title: 'STATUS' }
-    ],
-    append: fs.existsSync('accounts.csv')
-});
+const ACCOUNTS_CSV = 'accounts.csv';
+const CSV_HEADER = 'EMAIL,PASSWORD,STATUS\n';
+
+function csvEscape(value) {
+    const str = String(value ?? '');
+    return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function appendAccountRecord({ email, password, status }) {
+    if (!fs.existsSync(ACCOUNTS_CSV) || !fs.readFileSync(ACCOUNTS_CSV, 'utf8').trim()) {
+        fs.writeFileSync(ACCOUNTS_CSV, CSV_HEADER);
+    } else if (!fs.readFileSync(ACCOUNTS_CSV, 'utf8').endsWith('\n')) {
+        fs.appendFileSync(ACCOUNTS_CSV, '\n');
+    }
+    fs.appendFileSync(ACCOUNTS_CSV, [email, password, status].map(csvEscape).join(',') + '\n');
+}
 
 function generateRandomString(length) {
     return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
@@ -68,7 +74,7 @@ async function waitForFigmaVerificationEmail(emailAddress, password, timeoutMs =
         try {
             const connection = await imaps.connect(config);
             await connection.openBox('INBOX');
-            const results = await connection.search(['ALL'], { bodies: [''], markSeen: true });
+            const results = await connection.search(['ALL'], { bodies: [''], markSeen: false });
             for (let i = results.length - 1; i >= 0; i--) {
                 const body = results[i].parts.find(part => part.which === '');
                 const parsed = await simpleParser(body.body);
@@ -193,12 +199,12 @@ async function run() {
             console.log(`[+] Visiting verification link...`);
             await page.goto(verificationLink, { waitUntil: 'domcontentloaded' });
             await page.waitForTimeout(5000);
-            await csvWriter.writeRecords([{ email, password, status: 'Verified via Weave' }]);
+            appendAccountRecord({ email, password, status: 'Verified via Weave' });
             verified = true;
         } catch (error) {
             const cleanError = error.message.replace(/\n/g, ' | ').replace(/\[\d+m/g, '');
             console.error(`\n[ERROR] [-] Error during creation of ${email || prefix}: ${cleanError}`);
-            await csvWriter.writeRecords([{ email: email || prefix, password, status: `Failed: ${cleanError}` }]);
+            appendAccountRecord({ email: email || prefix, password, status: `Failed: ${cleanError}` });
             if (context && page) {
                 const dateStamp = new Date().toISOString().split('T')[0];
                 const errDir = path.join(__dirname, 'errors', dateStamp);

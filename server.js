@@ -34,17 +34,23 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', (req, res) => {
     const settings = req.body;
     let envContent = fs.existsSync('.env') ? fs.readFileSync('.env', 'utf8') : '';
-    
+
     for (const [key, value] of Object.entries(settings)) {
-        const regex = new RegExp(`^${key}=.*`, 'm');
+        const cleanKey = String(key).trim();
+        // Only allow valid env var names — blocks injection via crafted keys
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) continue;
+        // Strip newlines so a value can't inject extra env entries
+        const cleanValue = String(value).replace(/[\r\n]+/g, ' ').trim();
+
+        const regex = new RegExp(`^${cleanKey}=.*`, 'm');
         if (regex.test(envContent)) {
-            envContent = envContent.replace(regex, `${key}=${value}`);
+            envContent = envContent.replace(regex, `${cleanKey}=${cleanValue}`);
         } else {
-            envContent += `\n${key}=${value}`;
+            envContent += `\n${cleanKey}=${cleanValue}`;
         }
     }
-    fs.writeFileSync('.env', envContent.trim());
-    require('dotenv').config(); // Reload env
+    fs.writeFileSync('.env', envContent.trim() + '\n');
+    require('dotenv').config({ override: true }); // Reload env (override needed to refresh already-loaded values)
     res.json({ success: true });
 });
 
@@ -152,7 +158,13 @@ app.post('/api/bot/start', (req, res) => {
 
 app.post('/api/bot/stop', (req, res) => {
     if (botProcess) {
-        botProcess.kill();
+        // Kill the whole process tree — botProcess.kill() alone leaves
+        // Playwright's Chromium processes orphaned on Windows
+        if (process.platform === 'win32') {
+            spawn('taskkill', ['/pid', String(botProcess.pid), '/T', '/F']);
+        } else {
+            botProcess.kill('SIGTERM');
+        }
         botProcess = null;
         io.emit('botStatus', false);
         return res.json({ success: true });
@@ -165,19 +177,47 @@ app.get('/api/bot/status', (req, res) => {
 });
 
 // Endpoints for Accounts
+
+// RFC 4180-style CSV line parser: handles quoted fields containing commas and escaped quotes
+function parseCsvLine(line) {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (line[i + 1] === '"') { current += '"'; i++; }
+                else inQuotes = false;
+            } else {
+                current += ch;
+            }
+        } else if (ch === '"') {
+            inQuotes = true;
+        } else if (ch === ',') {
+            values.push(current);
+            current = '';
+        } else {
+            current += ch;
+        }
+    }
+    values.push(current);
+    return values;
+}
+
 app.get('/api/accounts', (req, res) => {
     if (!fs.existsSync('accounts.csv')) {
         return res.json([]);
     }
     const content = fs.readFileSync('accounts.csv', 'utf8').trim();
     if (!content) return res.json([]);
-    
-    const lines = content.split('\n');
-    const headers = lines[0].split(',');
-    const results = lines.slice(1).map(line => {
-        const values = line.split(',');
+
+    const lines = content.split(/\r?\n/);
+    const headers = parseCsvLine(lines[0]).map(h => h.trim());
+    const results = lines.slice(1).filter(l => l.trim()).map(line => {
+        const values = parseCsvLine(line);
         const obj = {};
-        headers.forEach((h, i) => { obj[h.trim()] = values[i] ? values[i].trim() : ''; });
+        headers.forEach((h, i) => { obj[h] = values[i] ? values[i].trim() : ''; });
         return obj;
     });
     res.json(results);
@@ -186,15 +226,14 @@ app.get('/api/accounts', (req, res) => {
 app.delete('/api/accounts', (req, res) => {
     const { email } = req.body;
     if (!fs.existsSync('accounts.csv')) return res.json({ success: false });
-    
-    let lines = fs.readFileSync('accounts.csv', 'utf8').trim().split('\n');
+
+    let lines = fs.readFileSync('accounts.csv', 'utf8').trim().split(/\r?\n/);
     const newLines = lines.filter((line, idx) => {
         if (idx === 0) return true; // keep header
-        const values = line.split(',');
-        return values[0] !== email;
+        return parseCsvLine(line)[0] !== email;
     });
-    
-    fs.writeFileSync('accounts.csv', newLines.join('\n'));
+
+    fs.writeFileSync('accounts.csv', newLines.join('\n') + '\n');
     res.json({ success: true });
 });
 
