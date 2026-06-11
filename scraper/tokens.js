@@ -31,6 +31,8 @@ function pickToken(tokens, month) {
     return tokens.find(t => t.enabled && !isExhausted(t, month)) || null;
 }
 
+// markExhausted/addToken/removeToken/moveToken/toggleToken all mutate `tokens`
+// in place; the return value is the same array reference, not a copy.
 function markExhausted(tokens, label, month) {
     const t = tokens.find(x => x.label === label);
     if (t) t.exhaustedMonth = month;
