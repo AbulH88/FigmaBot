@@ -1,8 +1,6 @@
 require('dotenv').config();
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
-const { devices } = require('playwright');
-chromium.use(stealth);
+const { chromium } = require('playwright');
+const { newInjectedContext } = require('fingerprint-injector');
 const axios = require('axios');
 const imaps = require('imap-simple');
 const simpleParser = require('mailparser').simpleParser;
@@ -104,16 +102,16 @@ async function run() {
     }
     console.log(`[+] Loaded ${proxies.length} proxies.`);
 
-    // Fingerprint pools for randomization
+    // Timezone pool (rotated per account). The rest of the fingerprint —
+    // user-agent, screen, navigator props, WebGL/canvas — is generated fresh
+    // per account by fingerprint-generator so every account is internally
+    // consistent (e.g. an iPhone UA reports an Apple GPU) and distinct.
     const timezones = [
         'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
         'America/Phoenix', 'America/Detroit', 'America/Indiana/Indianapolis',
         'America/Boise', 'America/Anchorage', 'Pacific/Honolulu'
     ];
     const locales = ['en-US', 'en-GB', 'en-CA', 'en-AU'];
-    const mobileWidths = [360, 375, 390, 393, 412, 414];
-    const mobileHeights = [640, 667, 720, 780, 812, 844, 851, 869, 915, 932];
-    const scaleFactors = [2, 2.625, 3, 3.5];
 
     for (let i = 0; i < numAccounts; i++) {
         const prefix = generateRandomString(10);
@@ -152,26 +150,26 @@ async function run() {
                 console.log(`[!] No proxies loaded. Running without proxy.`);
             }
 
-            // Randomize fingerprint for this account
-            const fp = {
-                width: mobileWidths[Math.floor(Math.random() * mobileWidths.length)],
-                height: mobileHeights[Math.floor(Math.random() * mobileHeights.length)],
-                scale: scaleFactors[Math.floor(Math.random() * scaleFactors.length)],
-                tz: timezones[Math.floor(Math.random() * timezones.length)],
-                locale: locales[Math.floor(Math.random() * locales.length)]
-            };
-            console.log(`[+] Fingerprint: ${fp.width}x${fp.height} @${fp.scale}x | ${fp.tz} | ${fp.locale}`);
+            const tz = timezones[Math.floor(Math.random() * timezones.length)];
 
-            // Fresh browser per account = completely isolated fingerprint
+            // Fresh browser per account = completely isolated fingerprint.
+            // newInjectedContext generates a real mobile device fingerprint
+            // (UA, screen, navigator, WebGL/canvas) and injects it consistently.
             browser = await chromium.launch({ headless: true });
-            context = await browser.newContext({
-                viewport: { width: fp.width, height: fp.height },
-                deviceScaleFactor: fp.scale,
-                timezoneId: fp.tz,
-                locale: fp.locale,
-                proxy: proxyObj
+            context = await newInjectedContext(browser, {
+                fingerprintOptions: {
+                    devices: ['mobile'],
+                    operatingSystems: ['android', 'ios'],
+                    locales: locales,
+                },
+                newContextOptions: {
+                    timezoneId: tz,
+                    proxy: proxyObj,
+                },
             });
             page = await context.newPage();
+            const ua = await page.evaluate(() => navigator.userAgent).catch(() => 'unknown');
+            console.log(`[+] Fingerprint: ${tz} | ${ua}`);
 
             console.log(`[+] Navigating directly to Weavy Sign-in...`);
             await page.goto('https://app.weavy.ai/signin', { waitUntil: 'domcontentloaded' });
