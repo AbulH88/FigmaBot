@@ -301,17 +301,18 @@ async function loadAccounts() {
 
 function renderAccounts() {
     accountsBody.innerHTML = '';
-    if (accountsCache.length === 0) {
+    // Show only good (verified) accounts in the table. Failed/Skipped/Blocked
+    // rows stay in the CSV and the stats cards, but aren't listed here.
+    const goodAccounts = accountsCache.filter(a => (a.STATUS || '').includes('Verified'));
+    if (goodAccounts.length === 0) {
         accountsBody.innerHTML =
-            '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No accounts generated yet.</td></tr>';
+            '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No verified accounts yet.</td></tr>';
         return;
     }
 
-    accountsCache.forEach(acc => {
+    goodAccounts.forEach(acc => {
         const tr = document.createElement('tr');
-        let statusClass = 'pending';
-        if (acc.STATUS && acc.STATUS.includes('Failed')) statusClass = 'bad';
-        else if (acc.STATUS && acc.STATUS.includes('Verified')) statusClass = 'good';
+        const statusClass = 'good';
 
         const tdEmail = document.createElement('td');
         tdEmail.className = 'cell-copy';
@@ -377,10 +378,12 @@ async function deleteAccount(email) {
 document.getElementById('refresh-accounts').addEventListener('click', loadAccounts);
 
 document.getElementById('export-accounts').addEventListener('click', () => {
-    if (accountsCache.length === 0) return toast('No accounts to export');
+    // Export only the good (verified) accounts — the usable credentials.
+    const good = accountsCache.filter(a => (a.STATUS || '').includes('Verified'));
+    if (good.length === 0) return toast('No verified accounts to export');
     const esc = v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v;
     const rows = ['EMAIL,PASSWORD,STATUS',
-        ...accountsCache.map(a => [a.EMAIL, a.PASSWORD, a.STATUS].map(v => esc(v || '')).join(','))];
+        ...good.map(a => [a.EMAIL, a.PASSWORD, a.STATUS].map(v => esc(v || '')).join(','))];
     const blob = new Blob([rows.join('\n') + '\n'], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
