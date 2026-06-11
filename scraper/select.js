@@ -40,6 +40,8 @@ function selectReels({ candidatesByNiche, downloadedSet, filters, niches, now = 
             if (item.plays < filters.minPlays) continue;
             if (item.timestamp) {
                 const age = now - new Date(item.timestamp);
+                // Unparseable timestamps give NaN age — keep the item rather than
+                // dropping it over bad metadata.
                 if (Number.isFinite(age) && age > maxAgeMs) continue;
             }
             if (item.durationSec !== null && item.durationSec > filters.maxDurationSec) continue;

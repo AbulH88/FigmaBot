@@ -37,6 +37,8 @@ test('normalizeItem returns null for non-video items or missing shortcode', () =
 test('normalizeItem falls back to shortcode from url and alternate count fields', () => {
     const item = normalizeItem(rawItem({ shortCode: undefined, videoPlayCount: undefined, playsCount: 777 }));
     assert.strictEqual(item.shortcode, 'ABC123');
+    const viewItem = normalizeItem(rawItem({ videoPlayCount: undefined, videoViewCount: 555 }));
+    assert.strictEqual(viewItem.plays, 555);
     assert.strictEqual(item.plays, 777);
 });
 
