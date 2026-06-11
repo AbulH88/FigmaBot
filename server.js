@@ -150,7 +150,9 @@ app.post('/api/bot/start', (req, res) => {
         return res.json({ success: false, error: 'Bot is already running.' });
     }
 
-    botProcess = spawn('node', ['bot.js']);
+    // detached on POSIX puts the bot in its own process group so stop can
+    // kill the whole tree (Playwright's Chromium included) via kill(-pid)
+    botProcess = spawn('node', ['bot.js'], { detached: process.platform !== 'win32' });
 
     botProcess.stdout.on('data', (data) => {
         io.emit('log', data.toString());
@@ -173,11 +175,12 @@ app.post('/api/bot/start', (req, res) => {
 app.post('/api/bot/stop', (req, res) => {
     if (botProcess) {
         // Kill the whole process tree — botProcess.kill() alone leaves
-        // Playwright's Chromium processes orphaned on Windows
+        // Playwright's Chromium processes orphaned
         if (process.platform === 'win32') {
             spawn('taskkill', ['/pid', String(botProcess.pid), '/T', '/F']);
         } else {
-            botProcess.kill('SIGTERM');
+            try { process.kill(-botProcess.pid, 'SIGTERM'); }
+            catch (e) { botProcess.kill('SIGTERM'); }
         }
         botProcess = null;
         io.emit('botStatus', false);
