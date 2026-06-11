@@ -64,3 +64,21 @@ test('sweepRetention removes only date-dirs older than cutoff, prunes empty nich
 test('sweepRetention on missing baseDir returns []', () => {
     assert.deepStrictEqual(sweepRetention(path.join(os.tmpdir(), 'missing-' + Date.now()), 60, NOW), []);
 });
+
+test('downloadReel cleans up temp file when the stream fails mid-transfer', async () => {
+    const base = tmpdir();
+    function failingStream() {
+        const s = Readable.from((async function* () {
+            yield Buffer.from('PARTIAL');
+            throw new Error('connection reset');
+        })());
+        return s;
+    }
+    const fakeHttp = { get: async () => ({ data: failingStream() }) };
+    await assert.rejects(
+        downloadReel(ITEM, { niche: 'dance', baseDir: base, http: fakeHttp, now: NOW }),
+        /connection reset/
+    );
+    const dir = path.join(base, 'dance', '2026-06-11');
+    assert.deepStrictEqual(fs.readdirSync(dir), []); // no .mp4, no .tmp, no sidecar
+});

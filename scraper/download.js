@@ -19,9 +19,16 @@ async function downloadReel(item, { niche, baseDir = DOWNLOADS_DIR, http = axios
     fs.mkdirSync(dir, { recursive: true });
     const base = `${sanitize(item.creator)}_${sanitize(item.shortcode)}`;
     const filePath = path.join(dir, `${base}.mp4`);
+    const tmpPath = filePath + '.tmp';
 
     const res = await http.get(item.videoUrl, { responseType: 'stream', timeout: 120000 });
-    await pipeline(res.data, fs.createWriteStream(filePath));
+    try {
+        await pipeline(res.data, fs.createWriteStream(tmpPath));
+        fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+        try { fs.unlinkSync(tmpPath); } catch (e) { /* already gone */ }
+        throw err;
+    }
 
     const sidecar = {
         shortcode: item.shortcode,
