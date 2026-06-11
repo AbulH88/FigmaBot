@@ -22,6 +22,8 @@ function saveDownloaded(set, file = DOWNLOADED_PATH) {
     fs.writeFileSync(file, JSON.stringify([...set], null, 2) + '\n');
 }
 
+// Best-effort lock for single-box callers (cron vs dashboard); the
+// exists/read/write sequence is not atomic across simultaneous callers.
 function acquireLock(file = LOCK_PATH, now = Date.now()) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     if (fs.existsSync(file)) {
