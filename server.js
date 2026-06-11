@@ -6,8 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
-const axios = require('axios');
-const { ProxyAgent } = require('proxy-agent');
+const { parseProxyUrl, validateProxy } = require('./proxyCheck');
 const multer = require('multer');
 
 const app = express();
@@ -104,51 +103,68 @@ app.delete('/api/proxies', (req, res) => {
 });
 
 app.post('/api/check-proxy', async (req, res) => {
-    const { proxy } = req.body;
-    try {
-        const proxyStr = String(proxy || '').trim();
-        let proxyUrl;
+    const proxyUrl = parseProxyUrl(req.body && req.body.proxy);
+    if (!proxyUrl) return res.json({ success: false, error: 'Invalid proxy format' });
 
-        if (proxyStr.includes('://')) {
-            try {
-                new URL(proxyStr);
-                proxyUrl = proxyStr;
-            } catch (e) {
-                return res.json({ success: false, error: 'Invalid proxy URL' });
-            }
-        } else {
-            const parts = proxyStr.split(':');
-            if (parts.length === 4) {
-                proxyUrl = `http://${encodeURIComponent(parts[2])}:${encodeURIComponent(parts[3])}@${parts[0]}:${parts[1]}`;
-            } else if (parts.length === 2) {
-                proxyUrl = `http://${parts[0]}:${parts[1]}`;
-            } else {
-                return res.json({ success: false, error: 'Invalid proxy format' });
-            }
-        }
-
-        // Lightweight HTTPS request through the proxy — a CONNECT tunnel to
-        // figma.com proves the same connectivity the bot needs, without the
-        // cost of launching a browser per proxy
-        const agent = new ProxyAgent({ getProxyForUrl: () => proxyUrl });
-        await axios.head('https://www.figma.com/', {
-            httpAgent: agent,
-            httpsAgent: agent,
-            proxy: false,
-            timeout: 10000,
-            validateStatus: (s) => s < 500
-        });
-        res.json({ success: true });
-    } catch (err) {
-        res.json({ success: false, error: err.message.split('\n')[0] });
+    // Make a real request through the proxy and require a genuine exit IP.
+    // A locked/denied proxy (4xx/5xx) fails here instead of reporting "working".
+    const result = await validateProxy(proxyUrl);
+    if (result.ok) {
+        const loc = [result.city, result.region, result.country].filter(Boolean).join(', ');
+        return res.json({ success: true, ip: result.ip, location: loc });
     }
+    return res.json({ success: false, error: result.error });
 });
 
 // Endpoints for Bot Control
-app.post('/api/bot/start', (req, res) => {
+app.post('/api/bot/start', async (req, res) => {
     if (botProcess) {
         return res.json({ success: false, error: 'Bot is already running.' });
     }
+
+    // --- Pre-flight: validate proxies before the bot creates anything ----
+    // The bot must never run on the machine's real IP, so refuse to start
+    // unless at least one proxy actually works. Keep only the good ones.
+    let proxies = [];
+    if (fs.existsSync('proxies.txt')) {
+        proxies = fs.readFileSync('proxies.txt', 'utf8').split('\n').map(p => p.trim()).filter(Boolean);
+    }
+    if (proxies.length === 0) {
+        return res.json({ success: false, error: 'No proxies loaded — add at least one working proxy before starting.' });
+    }
+
+    io.emit('log', `[*] Pre-flight: validating ${proxies.length} prox${proxies.length === 1 ? 'y' : 'ies'} before starting...\n`);
+    const results = new Array(proxies.length);
+    let next = 0;
+    async function worker() {
+        while (next < proxies.length) {
+            const idx = next++;
+            const line = proxies[idx];
+            const url = parseProxyUrl(line);
+            const r = url ? await validateProxy(url) : { ok: false, error: 'unparseable line' };
+            results[idx] = { line, ok: r.ok };
+            const tag = line.split('@').pop();
+            io.emit('log', r.ok
+                ? `[*]   OK  ${r.ip} ${[r.city, r.country].filter(Boolean).join(', ')}  (${tag})\n`
+                : `[*]   BAD ${r.error}  (${tag})\n`);
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(5, proxies.length) }, worker));
+
+    const good = results.filter(r => r.ok);
+    if (good.length === 0) {
+        const msg = 'All proxies failed validation — bot not started. Fix your proxies and try again.';
+        io.emit('log', `[ERROR] ${msg}\n`);
+        return res.json({ success: false, error: msg });
+    }
+
+    // Persist only the validated proxies so the bot runs on known-good IPs.
+    fs.writeFileSync('proxies.txt', good.map(r => r.line).join('\n') + '\n');
+    const want = parseInt(process.env.ACCOUNTS_TO_CREATE) || 1;
+    if (good.length < want) {
+        io.emit('log', `[!] Only ${good.length} working prox${good.length === 1 ? 'y' : 'ies'} for ${want} accounts — IPs will be reused (higher flag risk).\n`);
+    }
+    io.emit('log', `[+] ${good.length}/${proxies.length} proxies OK — starting bot.\n`);
 
     // detached on POSIX puts the bot in its own process group so stop can
     // kill the whole tree (Playwright's Chromium included) via kill(-pid)

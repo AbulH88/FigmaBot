@@ -7,6 +7,7 @@ const simpleParser = require('mailparser').simpleParser;
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { parseProxyUrl, proxyUrlToPlaywright, validateProxy } = require('./proxyCheck');
 
 const ACCOUNTS_CSV = 'accounts.csv';
 const CSV_HEADER = 'EMAIL,PASSWORD,STATUS\n';
@@ -124,33 +125,36 @@ async function run() {
 
         try {
             console.log(`\n--- Starting Account ${i + 1}/${numAccounts} ---`);
+
+            // --- Proxy first, fail-closed ---------------------------------
+            // Never create an account on this machine's real IP. Parse the
+            // proxy, then make a REAL request through it; only continue if it
+            // returns a genuine exit IP. A missing, malformed, or locked proxy
+            // (e.g. ProxyJet "423 Locked") skips the account instead of
+            // silently falling back to the direct connection.
+            const proxyUrl = proxies.length > 0 ? parseProxyUrl(proxies[i % proxies.length]) : null;
+            const proxyObj = proxyUrl ? proxyUrlToPlaywright(proxyUrl) : null;
+            if (!proxyObj || !proxyUrl) {
+                console.error(`[ERROR] [-] No usable proxy for account ${i + 1} — skipping (refusing to run on the real IP).`);
+                appendAccountRecord({ email: prefix, password, status: 'Skipped: no proxy configured' });
+                continue;
+            }
+            console.log(`[+] Validating proxy ${proxyObj.server} before signup...`);
+            const proxyResult = await validateProxy(proxyUrl);
+            if (!proxyResult.ok) {
+                console.error(`[ERROR] [-] Proxy failed (${proxyResult.error}) — skipping account, NOT creating on the real IP.`);
+                appendAccountRecord({ email: prefix, password, status: `Skipped: proxy failed (${proxyResult.error})` });
+                continue;
+            }
+            console.log(`[+] Proxy OK — exit IP ${proxyResult.ip} (${[proxyResult.city, proxyResult.region, proxyResult.country].filter(Boolean).join(', ') || 'geo unknown'})`);
+
+            // Proxy proven good — now it's safe to create the mailbox.
             email = await createDirectAdminEmail(prefix, password);
 
-            // Parse proxy
-            let proxyObj = undefined;
-            if (proxies.length > 0) {
-                const proxyStr = proxies[i % proxies.length];
-                if (proxyStr.includes('://')) {
-                    try {
-                        const url = new URL(proxyStr);
-                        proxyObj = { server: `${url.protocol}//${url.hostname}:${url.port}` };
-                        if (url.username) proxyObj.username = decodeURIComponent(url.username);
-                        if (url.password) proxyObj.password = decodeURIComponent(url.password);
-                    } catch (e) { console.log('[-] Invalid proxy URL'); }
-                } else {
-                    const parts = proxyStr.split(':');
-                    if (parts.length === 4) {
-                        proxyObj = { server: `http://${parts[0]}:${parts[1]}`, username: parts[2], password: parts[3] };
-                    } else if (parts.length === 2) {
-                        proxyObj = { server: `http://${parts[0]}:${parts[1]}` };
-                    }
-                }
-                console.log(`[+] Using Proxy: ${proxyObj ? proxyObj.server : 'Invalid'}`);
-            } else {
-                console.log(`[!] No proxies loaded. Running without proxy.`);
-            }
-
-            const tz = timezones[Math.floor(Math.random() * timezones.length)];
+            // Match the browser timezone to the proxy's REAL exit location so an
+            // AU/US/etc. IP isn't paired with a mismatched timezone (a bot tell).
+            // Fall back to the random US pool only if the lookup gave nothing.
+            const tz = proxyResult.timezone || timezones[Math.floor(Math.random() * timezones.length)];
 
             // Fresh browser per account = completely isolated fingerprint.
             // newInjectedContext generates a real mobile device fingerprint

@@ -235,11 +235,19 @@ btnCheckProxies.addEventListener('click', async () => {
                 body: JSON.stringify({ proxy: proxies[i] })
             });
             results[i] = data.success;
+            statusSpan.dataset.ip = data.ip || '';
+            statusSpan.dataset.loc = data.location || '';
+            statusSpan.dataset.err = data.error || '';
         } catch (err) {
             results[i] = false;
         }
         statusSpan.className = `proxy-status ${results[i] ? 'good' : 'bad'}`;
-        statusSpan.textContent = results[i] ? 'Working' : 'Dead';
+        if (results[i]) {
+            const loc = statusSpan.dataset.loc ? ` — ${statusSpan.dataset.loc}` : '';
+            statusSpan.textContent = statusSpan.dataset.ip ? `Working (${statusSpan.dataset.ip}${loc})` : 'Working';
+        } else {
+            statusSpan.textContent = 'Dead';
+        }
     }
 
     // Check 5 at a time
