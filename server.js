@@ -5,15 +5,41 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const axios = require('axios');
 const { ProxyAgent } = require('proxy-agent');
 const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// --- Auth (opt-in): set DASHBOARD_PASSWORD in .env to require a login ---
+const DASHBOARD_PASSWORD = (process.env.DASHBOARD_PASSWORD || '').trim();
+
+function checkAuth(authHeader) {
+    if (!DASHBOARD_PASSWORD) return true;
+    if (!authHeader || !authHeader.startsWith('Basic ')) return false;
+    const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
+    const pass = decoded.slice(decoded.indexOf(':') + 1);
+    const given = Buffer.from(pass);
+    const expected = Buffer.from(DASHBOARD_PASSWORD);
+    return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+}
+
+// allowRequest gates the socket.io handshake itself — socket.io attaches to
+// the HTTP server ahead of Express, so Express middleware can't cover it
+const io = new Server(server, {
+    allowRequest: (req, callback) => callback(null, checkAuth(req.headers.authorization))
+});
 
 app.use(express.json());
+
+app.use((req, res, next) => {
+    if (checkAuth(req.headers.authorization)) return next();
+    res.set('WWW-Authenticate', 'Basic realm="FigmaBot"');
+    res.status(401).send('Authentication required');
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 let botProcess = null;
@@ -80,53 +106,41 @@ app.delete('/api/proxies', (req, res) => {
 app.post('/api/check-proxy', async (req, res) => {
     const { proxy } = req.body;
     try {
-        let proxyStr = proxy.trim();
-        let proxyObj;
+        const proxyStr = String(proxy || '').trim();
+        let proxyUrl;
 
         if (proxyStr.includes('://')) {
             try {
-                const url = new URL(proxyStr);
-                proxyObj = { server: `${url.protocol}//${url.hostname}:${url.port}` };
-                if (url.username) proxyObj.username = decodeURIComponent(url.username);
-                if (url.password) proxyObj.password = decodeURIComponent(url.password);
+                new URL(proxyStr);
+                proxyUrl = proxyStr;
             } catch (e) {
                 return res.json({ success: false, error: 'Invalid proxy URL' });
             }
         } else {
             const parts = proxyStr.split(':');
             if (parts.length === 4) {
-                proxyObj = { server: `http://${parts[0]}:${parts[1]}`, username: parts[2], password: parts[3] };
+                proxyUrl = `http://${encodeURIComponent(parts[2])}:${encodeURIComponent(parts[3])}@${parts[0]}:${parts[1]}`;
             } else if (parts.length === 2) {
-                proxyObj = { server: `http://${parts[0]}:${parts[1]}` };
+                proxyUrl = `http://${parts[0]}:${parts[1]}`;
             } else {
                 return res.json({ success: false, error: 'Invalid proxy format' });
             }
         }
 
-        // Test with Playwright (same engine as the bot) to guarantee real compatibility
-        const { chromium } = require('playwright');
-        const browser = await chromium.launch({ headless: true });
-        const context = await browser.newContext({
-            viewport: { width: 390, height: 844 },
-            proxy: proxyObj
+        // Lightweight HTTPS request through the proxy — a CONNECT tunnel to
+        // figma.com proves the same connectivity the bot needs, without the
+        // cost of launching a browser per proxy
+        const agent = new ProxyAgent({ getProxyForUrl: () => proxyUrl });
+        await axios.head('https://www.figma.com/', {
+            httpAgent: agent,
+            httpsAgent: agent,
+            proxy: false,
+            timeout: 10000,
+            validateStatus: (s) => s < 500
         });
-        const page = await context.newPage();
-
-        try {
-            await page.goto('https://www.figma.com/', { timeout: 15000, waitUntil: 'domcontentloaded' });
-            const status = page.url().includes('figma.com');
-            await browser.close();
-            if (status) {
-                res.json({ success: true });
-            } else {
-                res.json({ success: false, error: 'Did not reach Figma' });
-            }
-        } catch (navError) {
-            await browser.close();
-            res.json({ success: false, error: navError.message.split('\n')[0] });
-        }
+        res.json({ success: true });
     } catch (err) {
-        res.json({ success: false, error: err.message });
+        res.json({ success: false, error: err.message.split('\n')[0] });
     }
 });
 
@@ -243,6 +257,11 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Web UI running on http://localhost:${PORT}`);
+// Localhost-only by default; set HOST=0.0.0.0 (and DASHBOARD_PASSWORD) to expose on the network
+const HOST = process.env.HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
+    console.log(`Web UI running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+    if (HOST === '0.0.0.0' && !DASHBOARD_PASSWORD) {
+        console.log('[!] WARNING: exposed on the network without DASHBOARD_PASSWORD set.');
+    }
 });

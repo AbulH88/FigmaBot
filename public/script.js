@@ -222,9 +222,9 @@ document.getElementById('clear-proxies').addEventListener('click', async () => {
 btnCheckProxies.addEventListener('click', async () => {
     if (proxies.length === 0) return toast('No proxies to check');
     btnCheckProxies.disabled = true;
-    const workingProxies = [];
+    const results = new Array(proxies.length).fill(false);
 
-    for (let i = 0; i < proxies.length; i++) {
+    async function checkOne(i) {
         const statusSpan = document.getElementById(`proxy-status-${i}`);
         statusSpan.className = 'proxy-status testing';
         statusSpan.textContent = 'Testing...';
@@ -234,19 +234,22 @@ btnCheckProxies.addEventListener('click', async () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ proxy: proxies[i] })
             });
-            if (data.success) {
-                statusSpan.className = 'proxy-status good';
-                statusSpan.textContent = 'Working';
-                workingProxies.push(proxies[i]);
-            } else {
-                statusSpan.className = 'proxy-status bad';
-                statusSpan.textContent = 'Dead';
-            }
+            results[i] = data.success;
         } catch (err) {
-            statusSpan.className = 'proxy-status bad';
-            statusSpan.textContent = 'Dead';
+            results[i] = false;
         }
+        statusSpan.className = `proxy-status ${results[i] ? 'good' : 'bad'}`;
+        statusSpan.textContent = results[i] ? 'Working' : 'Dead';
     }
+
+    // Check 5 at a time
+    let nextIdx = 0;
+    async function worker() {
+        while (nextIdx < proxies.length) await checkOne(nextIdx++);
+    }
+    await Promise.all(Array.from({ length: Math.min(5, proxies.length) }, worker));
+
+    const workingProxies = proxies.filter((_, i) => results[i]);
 
     // Keep only working proxies
     if (workingProxies.length > 0 && workingProxies.length < proxies.length) {
