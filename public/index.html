@@ -4,124 +4,183 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FigmaBot Control Center</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="glass-bg"></div>
-    <div class="container">
-        <header>
-            <div class="logo">
+
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
                 <div class="logo-icon"></div>
-                <h1>FigmaBot Web</h1>
+                <span class="logo-text">FigmaBot</span>
             </div>
-            <div class="status-indicator">
-                <div class="dot offline" id="status-dot"></div>
-                <span id="status-text">Bot Offline</span>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link" data-view="dashboard">
+                    <span class="nav-icon">▸</span> Dashboard
+                </a>
+                <a href="#proxies" class="nav-link" data-view="proxies">
+                    <span class="nav-icon">▸</span> Proxies
+                </a>
+                <a href="#accounts" class="nav-link" data-view="accounts">
+                    <span class="nav-icon">▸</span> Accounts
+                </a>
+                <a href="#settings" class="nav-link" data-view="settings">
+                    <span class="nav-icon">▸</span> Settings
+                </a>
+            </nav>
+
+            <div class="sidebar-status">
+                <div class="status-pill" id="status-pill">
+                    <div class="dot offline" id="status-dot"></div>
+                    <span id="status-text">Bot Offline</span>
+                </div>
             </div>
-        </header>
+        </aside>
 
-        <main>
-            <!-- Settings Section -->
-            <section class="card glass-card">
-                <h2><span class="icon">⚙️</span> Configuration</h2>
-                <form id="settings-form">
-                    <div class="form-grid">
-                        <div class="input-group">
-                            <label>DirectAdmin URL</label>
-                            <input type="url" id="DA_URL" name="DA_URL" placeholder="https://box.mxroute.com:2222" required>
-                        </div>
-                        <div class="input-group">
-                            <label>DirectAdmin Username</label>
-                            <input type="text" id="DA_USERNAME" name="DA_USERNAME" required>
-                        </div>
-                        <div class="input-group">
-                            <label>DirectAdmin Password</label>
-                            <input type="password" id="DA_PASSWORD" name="DA_PASSWORD" required>
-                        </div>
-                        <div class="input-group">
-                            <label>Email Domain</label>
-                            <input type="text" id="EMAIL_DOMAIN" name="EMAIL_DOMAIN" placeholder="futureworldsports.com" required>
-                        </div>
-                        <div class="input-group">
-                            <label>IMAP Host</label>
-                            <input type="text" id="IMAP_HOST" name="IMAP_HOST" placeholder="box.mxroute.com" required>
-                        </div>
-                        <div class="input-group">
-                            <label>IMAP Port</label>
-                            <input type="number" id="IMAP_PORT" name="IMAP_PORT" value="993" required>
-                        </div>
-                        <div class="input-group">
-                            <label>Accounts to Create</label>
-                            <input type="number" id="ACCOUNTS_TO_CREATE" name="ACCOUNTS_TO_CREATE" value="1" min="1" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Settings</button>
-                </form>
-            </section>
+        <!-- Main content -->
+        <main class="content">
 
-            <!-- Proxy Manager Section -->
-            <section class="card glass-card">
-                <h2><span class="icon">🌐</span> Proxy Manager</h2>
-                <div class="proxy-container">
-                    <div class="proxy-upload">
-                        <textarea id="proxy-input" placeholder="Paste proxies here (IP:PORT:USER:PASS) or upload a .txt file..." rows="5"></textarea>
-                        <div class="proxy-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
-                            <label for="proxy-file" class="btn btn-secondary">Upload .txt</label>
-                            <input type="file" id="proxy-file" accept=".txt" style="display:none;">
-                            <button id="clear-proxies" class="btn btn-danger">Clear Proxies</button>
-                            <button id="save-proxies" class="btn btn-primary">Save Proxies</button>
-                            <button id="check-proxies" class="btn btn-accent">Check Proxies</button>
-                        </div>
+            <!-- Dashboard view -->
+            <section class="view" id="view-dashboard">
+                <h1 class="view-title">Dashboard</h1>
+
+                <div class="stat-grid">
+                    <div class="stat-card glass-card">
+                        <span class="stat-value" id="stat-total">0</span>
+                        <span class="stat-label">Total Accounts</span>
                     </div>
-                    <div class="proxy-list-container">
-                        <div class="proxy-header">
-                            <span>Saved Proxies (<span id="proxy-count">0</span>)</span>
-                        </div>
-                        <ul id="proxy-list" class="proxy-list">
-                            <!-- Populated by JS -->
-                        </ul>
+                    <div class="stat-card glass-card">
+                        <span class="stat-value stat-good" id="stat-verified">0</span>
+                        <span class="stat-label">Verified</span>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <span class="stat-value stat-bad" id="stat-failed">0</span>
+                        <span class="stat-label">Failed</span>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <span class="stat-value stat-accent" id="stat-proxies">0</span>
+                        <span class="stat-label">Proxies Loaded</span>
                     </div>
                 </div>
-            </section>
 
-            <!-- Control & Logs Section -->
-            <section class="card glass-card">
-                <h2><span class="icon">🚀</span> Control Center</h2>
-                <div class="control-actions">
-                    <button id="btn-start" class="btn btn-success">Start Bot</button>
-                    <button id="btn-stop" class="btn btn-danger" disabled>Stop Bot</button>
+                <div class="card glass-card">
+                    <div class="run-controls">
+                        <div class="run-count">
+                            <label for="run-accounts">Accounts to create</label>
+                            <input type="number" id="run-accounts" min="1" value="1">
+                        </div>
+                        <button id="btn-start" class="btn btn-success btn-lg">▶ Start Bot</button>
+                        <button id="btn-stop" class="btn btn-danger btn-lg" disabled>■ Stop Bot</button>
+                    </div>
                 </div>
-                <div class="terminal-container">
-                    <div class="terminal-header">Live Logs</div>
+
+                <div class="terminal-container glass-card">
+                    <div class="terminal-header">
+                        <span>Live Logs</span>
+                        <button id="btn-clear-logs" class="btn btn-ghost btn-sm">Clear</button>
+                    </div>
                     <pre id="terminal" class="terminal"></pre>
                 </div>
             </section>
 
-            <!-- Generated Accounts Section -->
-            <section class="card glass-card">
-                <h2><span class="icon">📋</span> Generated Accounts</h2>
-                <div class="accounts-table-container">
+            <!-- Proxies view -->
+            <section class="view" id="view-proxies" hidden>
+                <h1 class="view-title">Proxies</h1>
+
+                <div class="proxy-container">
+                    <div class="card glass-card proxy-upload">
+                        <h2>Add Proxies</h2>
+                        <textarea id="proxy-input" placeholder="Paste proxies here, one per line&#10;IP:PORT or IP:PORT:USER:PASS or full URL" rows="8"></textarea>
+                        <div class="proxy-actions">
+                            <button id="save-proxies" class="btn btn-primary">Save Proxies</button>
+                            <label for="proxy-file" class="btn btn-secondary">Upload .txt</label>
+                            <input type="file" id="proxy-file" accept=".txt" hidden>
+                            <button id="check-proxies" class="btn btn-accent">Check All</button>
+                            <button id="clear-proxies" class="btn btn-danger">Clear All</button>
+                        </div>
+                    </div>
+
+                    <div class="card glass-card proxy-list-container">
+                        <h2>Saved Proxies <span class="count-badge" id="proxy-count">0</span></h2>
+                        <ul id="proxy-list" class="proxy-list"></ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Accounts view -->
+            <section class="view" id="view-accounts" hidden>
+                <div class="view-header">
+                    <h1 class="view-title">Accounts</h1>
+                    <div class="view-actions">
+                        <button id="export-accounts" class="btn btn-secondary">⤓ Export CSV</button>
+                        <button id="refresh-accounts" class="btn btn-secondary">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card glass-card accounts-table-container">
                     <table id="accounts-table">
                         <thead>
                             <tr>
                                 <th>Email</th>
                                 <th>Password</th>
                                 <th>Status</th>
-                                <th>Action</th>
+                                <th class="th-action">Action</th>
                             </tr>
                         </thead>
-                        <tbody id="accounts-body">
-                            <!-- Populated by JS -->
-                        </tbody>
+                        <tbody id="accounts-body"></tbody>
                     </table>
                 </div>
-                <div style="margin-top: 1rem; text-align: right;">
-                    <button id="refresh-accounts" class="btn btn-secondary">Refresh List</button>
+            </section>
+
+            <!-- Settings view -->
+            <section class="view" id="view-settings" hidden>
+                <h1 class="view-title">Settings</h1>
+
+                <div class="card glass-card">
+                    <form id="settings-form">
+                        <div class="form-grid">
+                            <div class="input-group">
+                                <label for="DA_URL">DirectAdmin URL</label>
+                                <input type="url" id="DA_URL" name="DA_URL" placeholder="https://box.example.com:2222" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="DA_USERNAME">DirectAdmin Username</label>
+                                <input type="text" id="DA_USERNAME" name="DA_USERNAME" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="DA_PASSWORD">DirectAdmin Password</label>
+                                <input type="password" id="DA_PASSWORD" name="DA_PASSWORD" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="EMAIL_DOMAIN">Email Domain</label>
+                                <input type="text" id="EMAIL_DOMAIN" name="EMAIL_DOMAIN" placeholder="example.com" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="IMAP_HOST">IMAP Host</label>
+                                <input type="text" id="IMAP_HOST" name="IMAP_HOST" placeholder="box.example.com" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="IMAP_PORT">IMAP Port</label>
+                                <input type="number" id="IMAP_PORT" name="IMAP_PORT" value="993" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="ACCOUNTS_TO_CREATE">Accounts to Create</label>
+                                <input type="number" id="ACCOUNTS_TO_CREATE" name="ACCOUNTS_TO_CREATE" value="1" min="1" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                    </form>
                 </div>
             </section>
+
         </main>
     </div>
+
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
