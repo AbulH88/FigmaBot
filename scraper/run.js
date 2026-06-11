@@ -67,6 +67,8 @@ async function main() {
                     }
                 }
             }
+            // items is null only when the while-loop broke out (tokens gone or
+            // niche failed); an empty [] result is a completed niche and falls through.
             if (!items) continue;
             log(`Niche "${niche}": ${items.length} candidates.`);
             resultsFetched += items.length;
