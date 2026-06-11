@@ -190,13 +190,20 @@ async function run() {
             await page.waitForSelector('input[name="password"]', { timeout: 15000 });
             await page.fill('input[name="password"]', password);
             await page.click('button[type="submit"]');
-            await page.waitForFunction(() => !window.location.pathname.includes('/signup') || document.querySelector('input[name="first_name"]'), { timeout: 0 });
+            await page.waitForFunction(() => !window.location.pathname.includes('/signup') || document.querySelector('input[name="first_name"]'), { timeout: 90000 });
             if (await page.isVisible('input[name="first_name"]').catch(()=>false)) {
                 await page.fill('input[name="first_name"]', 'Weave User');
                 await page.click('button[type="submit"]');
-                await page.waitForFunction(() => !window.location.pathname.includes('/signup'), { timeout: 0 });
+                await page.waitForFunction(() => !window.location.pathname.includes('/signup'), { timeout: 90000 });
             }
-            console.log(`[+] Signup passed!`);
+            // Flagged sessions get the OAuth-only wall and Figma sends NO
+            // verification email — detect that here instead of hanging for the
+            // full email-wait timeout on an account that will never verify.
+            const pageText = (await page.evaluate(() => document.body.innerText).catch(() => '')) || '';
+            if (/sign in with Google or Microsoft|isn't available|is not available/i.test(pageText)) {
+                throw new Error('Blocked: email signup disabled for this session (flagged — OAuth-only wall)');
+            }
+            console.log(`[+] Signup passed! (post-signup URL: ${page.url()})`);
             const verificationLink = await waitForFigmaVerificationEmail(email, password);
             console.log(`[+] Visiting verification link...`);
             await page.goto(verificationLink, { waitUntil: 'domcontentloaded' });
