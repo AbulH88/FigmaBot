@@ -1,0 +1,24 @@
+# Secrets & credentials
+.env
+
+# Generated account data (contains live credentials)
+accounts.csv
+
+# Proxy list (contains proxy credentials)
+proxies.txt
+
+# Dependencies
+node_modules/
+
+# Bot runtime artifacts
+errors/
+debug*.html
+debug*.png
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

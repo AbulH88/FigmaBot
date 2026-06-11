@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FigmaBot Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <h1>FigmaBot Web</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="dot offline" id="status-dot"></div>
+                <span id="status-text">Bot Offline</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Settings Section -->
+            <section class="card glass-card">
+                <h2><span class="icon">⚙️</span> Configuration</h2>
+                <form id="settings-form">
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>DirectAdmin URL</label>
+                            <input type="url" id="DA_URL" name="DA_URL" placeholder="https://box.mxroute.com:2222" required>
+                        </div>
+                        <div class="input-group">
+                            <label>DirectAdmin Username</label>
+                            <input type="text" id="DA_USERNAME" name="DA_USERNAME" required>
+                        </div>
+                        <div class="input-group">
+                            <label>DirectAdmin Password</label>
+                            <input type="password" id="DA_PASSWORD" name="DA_PASSWORD" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Email Domain</label>
+                            <input type="text" id="EMAIL_DOMAIN" name="EMAIL_DOMAIN" placeholder="futureworldsports.com" required>
+                        </div>
+                        <div class="input-group">
+                            <label>IMAP Host</label>
+                            <input type="text" id="IMAP_HOST" name="IMAP_HOST" placeholder="box.mxroute.com" required>
+                        </div>
+                        <div class="input-group">
+                            <label>IMAP Port</label>
+                            <input type="number" id="IMAP_PORT" name="IMAP_PORT" value="993" required>
+                        </div>
+                        <div class="input-group">
+                            <label>Accounts to Create</label>
+                            <input type="number" id="ACCOUNTS_TO_CREATE" name="ACCOUNTS_TO_CREATE" value="1" min="1" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </section>
+
+            <!-- Proxy Manager Section -->
+            <section class="card glass-card">
+                <h2><span class="icon">🌐</span> Proxy Manager</h2>
+                <div class="proxy-container">
+                    <div class="proxy-upload">
+                        <textarea id="proxy-input" placeholder="Paste proxies here (IP:PORT:USER:PASS) or upload a .txt file..." rows="5"></textarea>
+                        <div class="proxy-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
+                            <label for="proxy-file" class="btn btn-secondary">Upload .txt</label>
+                            <input type="file" id="proxy-file" accept=".txt" style="display:none;">
+                            <button id="clear-proxies" class="btn btn-danger">Clear Proxies</button>
+                            <button id="save-proxies" class="btn btn-primary">Save Proxies</button>
+                            <button id="check-proxies" class="btn btn-accent">Check Proxies</button>
+                        </div>
+                    </div>
+                    <div class="proxy-list-container">
+                        <div class="proxy-header">
+                            <span>Saved Proxies (<span id="proxy-count">0</span>)</span>
+                        </div>
+                        <ul id="proxy-list" class="proxy-list">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control & Logs Section -->
+            <section class="card glass-card">
+                <h2><span class="icon">🚀</span> Control Center</h2>
+                <div class="control-actions">
+                    <button id="btn-start" class="btn btn-success">Start Bot</button>
+                    <button id="btn-stop" class="btn btn-danger" disabled>Stop Bot</button>
+                </div>
+                <div class="terminal-container">
+                    <div class="terminal-header">Live Logs</div>
+                    <pre id="terminal" class="terminal"></pre>
+                </div>
+            </section>
+
+            <!-- Generated Accounts Section -->
+            <section class="card glass-card">
+                <h2><span class="icon">📋</span> Generated Accounts</h2>
+                <div class="accounts-table-container">
+                    <table id="accounts-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Password</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accounts-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 1rem; text-align: right;">
+                    <button id="refresh-accounts" class="btn btn-secondary">Refresh List</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
