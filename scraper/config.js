@@ -18,6 +18,8 @@ const DEFAULTS = {
 
 function isPosInt(n) { return Number.isInteger(n) && n > 0; }
 
+const FILTER_KEYS = ['minPlays', 'maxAgeDays', 'maxDurationSec'];
+
 function validateConfig(raw) {
     if (typeof raw !== 'object' || raw === null) {
         return { ok: false, errors: ['config must be an object'] };
@@ -27,7 +29,9 @@ function validateConfig(raw) {
         niches: {},
         resultsPerHashtag: raw.resultsPerHashtag !== undefined ? raw.resultsPerHashtag : DEFAULTS.resultsPerHashtag,
         maxResultsPerRun: raw.maxResultsPerRun !== undefined ? raw.maxResultsPerRun : DEFAULTS.maxResultsPerRun,
-        filters: Object.assign({}, DEFAULTS.filters, raw.filters || {}),
+        filters: Object.fromEntries(FILTER_KEYS.map(k => [k,
+            raw.filters && raw.filters[k] !== undefined ? raw.filters[k] : DEFAULTS.filters[k]
+        ])),
         retentionDays: raw.retentionDays !== undefined ? raw.retentionDays : DEFAULTS.retentionDays
     };
 
@@ -35,17 +39,18 @@ function validateConfig(raw) {
     if (Object.keys(niches).length === 0) errors.push('at least one niche is required');
     for (const [name, niche] of Object.entries(niches)) {
         if (!/^[a-z0-9_-]+$/i.test(name)) { errors.push(`invalid niche name: ${name}`); continue; }
-        const hashtags = ((niche && niche.hashtags) || [])
+        if (typeof niche !== 'object' || niche === null) { errors.push(`niche "${name}" must be an object`); continue; }
+        const hashtags = (Array.isArray(niche.hashtags) ? niche.hashtags : [])
             .map(h => String(h).trim().replace(/^#/, '').toLowerCase())
             .filter(Boolean);
         if (hashtags.length === 0) errors.push(`niche "${name}" needs at least one hashtag`);
-        if (!isPosInt(niche && niche.dailyQuota)) errors.push(`niche "${name}" needs a positive integer dailyQuota`);
+        if (!isPosInt(niche.dailyQuota)) errors.push(`niche "${name}" needs a positive integer dailyQuota`);
         cfg.niches[name] = { hashtags, dailyQuota: niche.dailyQuota };
     }
     for (const key of ['resultsPerHashtag', 'maxResultsPerRun', 'retentionDays']) {
         if (!isPosInt(cfg[key])) errors.push(`${key} must be a positive integer`);
     }
-    for (const key of ['minPlays', 'maxAgeDays', 'maxDurationSec']) {
+    for (const key of FILTER_KEYS) {
         if (!Number.isInteger(cfg.filters[key]) || cfg.filters[key] < 0) {
             errors.push(`filters.${key} must be a non-negative integer`);
         }

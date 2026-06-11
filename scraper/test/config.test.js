@@ -47,3 +47,21 @@ test('loadConfig throws on invalid stored config', () => {
     fs.writeFileSync(file, JSON.stringify({ niches: {} }));
     assert.throws(() => loadConfig(file), /Invalid scraper config/);
 });
+
+test('validateConfig handles null niche and non-array hashtags without throwing', () => {
+    const r1 = validateConfig({ niches: { dance: null } });
+    assert.strictEqual(r1.ok, false);
+    assert.match(r1.errors.join(' '), /must be an object/);
+
+    const r2 = validateConfig({ niches: { dance: { hashtags: 'dance', dailyQuota: 3 } } });
+    assert.strictEqual(r2.ok, false);
+    assert.match(r2.errors.join(' '), /at least one hashtag/);
+});
+
+test('validateConfig drops unknown filter keys', () => {
+    const r = validateConfig({ niches: { dance: { hashtags: ['x'], dailyQuota: 3 } }, filters: { minPlays: 5, bogus: 'nope' } });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.config.filters.minPlays, 5);
+    assert.strictEqual('bogus' in r.config.filters, false);
+    assert.strictEqual(r.config.filters.maxAgeDays, 14);
+});
