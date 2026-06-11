@@ -23,3 +23,8 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .playwright-mcp/
+
+# Reel scraper secrets & runtime data
+scraper/apify_tokens.json
+scraper/state/
+downloads/
