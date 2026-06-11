@@ -226,6 +226,19 @@ async function run() {
             if (email && verified) await deleteDirectAdminEmail(prefix);
             if (browser) await browser.close().catch(() => {});
         }
+
+        // Randomized pause between accounts so a batch isn't an obvious
+        // back-to-back burst (a velocity signal Figma watches for). Tunable
+        // via ACCOUNT_DELAY_MIN_SEC / ACCOUNT_DELAY_MAX_SEC; skipped after the
+        // last account. (Bad-proxy accounts `continue` before this and so move
+        // on immediately — no point pacing a signup that never happened.)
+        if (i < numAccounts - 1) {
+            const minSec = parseInt(process.env.ACCOUNT_DELAY_MIN_SEC) || 30;
+            const maxSec = parseInt(process.env.ACCOUNT_DELAY_MAX_SEC) || 90;
+            const waitSec = minSec + Math.floor(Math.random() * Math.max(1, maxSec - minSec + 1));
+            console.log(`[+] Waiting ${waitSec}s before next account...`);
+            await new Promise(r => setTimeout(r, waitSec * 1000));
+        }
     }
     console.log(`\n[+] Automation complete!`);
 }
