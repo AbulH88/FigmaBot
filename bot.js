@@ -63,8 +63,10 @@ async function deleteDirectAdminEmail(emailPrefix) {
     } catch (error) {}
 }
 
-async function waitForFigmaVerificationEmail(emailAddress, password, timeoutMs = 300000) {
-    console.log(`[+] Waiting for Figma verification email for ${emailAddress}...`);
+async function waitForFigmaVerificationEmail(emailAddress, password, timeoutMs = parseInt(process.env.VERIFICATION_TIMEOUT_MS) || 180000) {
+    // A clean signup's email lands within ~60-90s. A flagged one never sends,
+    // so there's no point waiting 5 min on it — default 3 min, env-tunable.
+    console.log(`[+] Waiting up to ${Math.round(timeoutMs / 1000)}s for Figma verification email for ${emailAddress}...`);
     const config = {
         imap: { user: emailAddress, password: password, host: process.env.IMAP_HOST, port: parseInt(process.env.IMAP_PORT), tls: true, authTimeout: 10000 }
     };
@@ -92,7 +94,7 @@ async function waitForFigmaVerificationEmail(emailAddress, password, timeoutMs =
         }
         await new Promise(resolve => setTimeout(resolve, 5000));
     }
-    throw new Error('Timeout waiting for verification email.');
+    throw new Error(`No verification email after ${Math.round(timeoutMs / 1000)}s — likely a flagged proxy (Figma sends no email when a signup is flagged).`);
 }
 
 async function run() {
