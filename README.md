@@ -115,3 +115,26 @@ port 3000 in the firewall — only nginx (443) is exposed.
 | `DASHBOARD_PASSWORD` | Optional: require login for the dashboard |
 | `HOST` | Bind address; default `127.0.0.1` (localhost only) |
 | `PORT` | Dashboard port; default `3000` |
+
+## Reel Scraper
+
+Downloads trending IG reels per niche for motion-control reference. Managed from the
+dashboard **Reel Scraper** tab (Apify tokens, niches/hashtags, filters, manual runs).
+
+- Discovery: Apify `instagram-hashtag-scraper` (pay-per-result; free plan = $5/mo credit).
+  Multiple free-account tokens rotate automatically when one runs out.
+- Output: `downloads/<niche>/<YYYY-MM-DD>/<creator>_<shortcode>.mp4` + `.json` metadata.
+- State: `scraper/state/downloaded.json` (dedupe), `scraper/apify_tokens.json` (secrets, gitignored).
+- Cost cap: `maxResultsPerRun` in `scraper/config.json` keeps discovery inside the free
+  credit (~48 results/day by default, roughly $3.75/month per token).
+
+### VPS cron (daily at 06:30 server time)
+
+```bash
+crontab -e
+# add (adjust the path to the app directory used by pm2 — check `pm2 info figmabot`):
+30 6 * * * cd /www/wwwroot/figmabot && /usr/bin/node scraper/run.js >> scraper/cron.log 2>&1
+```
+
+The same script powers the dashboard Run Now button; a lockfile prevents overlap.
+Logs: `scraper/cron.log` (cron) and the dashboard Scraper Logs panel (manual runs).
