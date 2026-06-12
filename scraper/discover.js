@@ -15,7 +15,9 @@ class TokenExhaustedError extends Error {
 // Each returned item costs Apify credit, so callers budget resultsLimit carefully.
 async function discoverNiche({ hashtags, resultsLimit, token, http = axios }) {
     try {
-        const res = await http.post(RUN_SYNC_URL, { hashtags, resultsLimit }, {
+        // resultsType 'reels' — without it the actor defaults to 'posts' and
+        // returns recent feed images with no videoUrl/play counts.
+        const res = await http.post(RUN_SYNC_URL, { hashtags, resultsLimit, resultsType: 'reels' }, {
             headers: { Authorization: `Bearer ${token}` },
             timeout: 300000 // run-sync endpoint can take minutes for cold actor starts
         });

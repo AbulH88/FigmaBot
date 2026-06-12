@@ -21,7 +21,7 @@ test('discoverNiche posts hashtags/resultsLimit with bearer token and returns it
     assert.deepStrictEqual(items.map(i => i.shortCode), ['X1', 'X2']);
     assert.match(captured.url, new RegExp(ACTOR_ID));
     assert.match(captured.url, /run-sync-get-dataset-items/);
-    assert.deepStrictEqual(captured.body, { hashtags: ['dance'], resultsLimit: 5 });
+    assert.deepStrictEqual(captured.body, { hashtags: ['dance'], resultsLimit: 5, resultsType: 'reels' });
     assert.strictEqual(captured.opts.headers.Authorization, 'Bearer tok123');
 });
 
