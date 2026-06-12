@@ -53,3 +53,19 @@ test('other errors are rethrown unchanged (not exhaustion)', async () => {
         err => !(err instanceof TokenExhaustedError) && /500/.test(err.message)
     );
 });
+
+test('discoverCreators posts username array to the reel actor with skipPinnedPosts', async () => {
+    const { discoverCreators, REEL_ACTOR_ID } = require('../discover');
+    let captured = null;
+    const fakeHttp = {
+        post: async (url, body, opts) => {
+            captured = { url, body, opts };
+            return { data: [{ shortCode: 'R1' }] };
+        }
+    };
+    const items = await discoverCreators({ usernames: ['dancer.one'], resultsLimit: 4, token: 'tok9', http: fakeHttp });
+    assert.deepStrictEqual(items.map(i => i.shortCode), ['R1']);
+    assert.match(captured.url, new RegExp(REEL_ACTOR_ID));
+    assert.deepStrictEqual(captured.body, { username: ['dancer.one'], resultsLimit: 4, skipPinnedPosts: true });
+    assert.strictEqual(captured.opts.headers.Authorization, 'Bearer tok9');
+});

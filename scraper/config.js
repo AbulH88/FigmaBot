@@ -6,9 +6,9 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 
 const DEFAULTS = {
     niches: {
-        dance: { hashtags: ['dancechallenge', 'choreography'], dailyQuota: 8 },
-        fashion: { hashtags: ['modelpose', 'fashionreels'], dailyQuota: 8 },
-        lifestyle: { hashtags: ['grwm', 'dayinmylife'], dailyQuota: 7 }
+        dance: { hashtags: ['dancechallenge', 'choreography'], creators: [], dailyQuota: 8 },
+        fashion: { hashtags: ['modelpose', 'fashionreels'], creators: [], dailyQuota: 8 },
+        lifestyle: { hashtags: ['grwm', 'dayinmylife'], creators: [], dailyQuota: 7 }
     },
     resultsPerHashtag: 8,
     maxResultsPerRun: 70,
@@ -43,9 +43,16 @@ function validateConfig(raw) {
         const hashtags = (Array.isArray(niche.hashtags) ? niche.hashtags : [])
             .map(h => String(h).trim().replace(/^#/, '').toLowerCase())
             .filter(Boolean);
-        if (hashtags.length === 0) errors.push(`niche "${name}" needs at least one hashtag`);
+        // Creators (IG usernames) take priority over hashtags during discovery —
+        // used to pin a niche to a curated list of (e.g. US-based) accounts.
+        const creators = (Array.isArray(niche.creators) ? niche.creators : [])
+            .map(c => String(c).trim().replace(/^@/, '').toLowerCase())
+            .filter(c => /^[a-z0-9._]+$/.test(c));
+        if (hashtags.length === 0 && creators.length === 0) {
+            errors.push(`niche "${name}" needs at least one hashtag or creator`);
+        }
         if (!isPosInt(niche.dailyQuota)) errors.push(`niche "${name}" needs a positive integer dailyQuota`);
-        cfg.niches[name] = { hashtags, dailyQuota: niche.dailyQuota };
+        cfg.niches[name] = { hashtags, creators, dailyQuota: niche.dailyQuota };
     }
     for (const key of ['resultsPerHashtag', 'maxResultsPerRun', 'retentionDays']) {
         if (!isPosInt(cfg[key])) errors.push(`${key} must be a positive integer`);

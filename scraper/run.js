@@ -3,7 +3,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const { loadConfig } = require('./config');
 const tokensLib = require('./tokens');
-const { discoverNiche, TokenExhaustedError } = require('./discover');
+const { discoverNiche, discoverCreators, TokenExhaustedError } = require('./discover');
 const { selectReels } = require('./select');
 const { downloadReel, sweepRetention, DOWNLOADS_DIR } = require('./download');
 const state = require('./state');
@@ -39,10 +39,16 @@ async function main() {
                 log(`Result cap (${config.maxResultsPerRun}) reached — skipping niche "${niche}".`);
                 continue;
             }
+            // Creators (curated accounts, e.g. US-only list) take priority over
+            // hashtag discovery when configured for a niche.
+            const useCreators = def.creators && def.creators.length > 0;
+            const sources = useCreators ? def.creators : def.hashtags;
+            const sourceWord = useCreators ? 'creator' : 'hashtag';
+
             const budget = config.maxResultsPerRun - resultsFetched;
-            const perHashtag = Math.max(1, Math.min(
+            const perSource = Math.max(1, Math.min(
                 config.resultsPerHashtag,
-                Math.floor(budget / def.hashtags.length)
+                Math.floor(budget / sources.length)
             ));
 
             let items = null;
@@ -54,8 +60,10 @@ async function main() {
                     break;
                 }
                 try {
-                    log(`Niche "${niche}": ${perHashtag}/hashtag for [${def.hashtags.join(', ')}] via token "${tok.label}"...`);
-                    items = await discoverNiche({ hashtags: def.hashtags, resultsLimit: perHashtag, token: tok.token });
+                    log(`Niche "${niche}": ${perSource}/${sourceWord} for [${sources.join(', ')}] via token "${tok.label}"...`);
+                    items = useCreators
+                        ? await discoverCreators({ usernames: sources, resultsLimit: perSource, token: tok.token })
+                        : await discoverNiche({ hashtags: sources, resultsLimit: perSource, token: tok.token });
                 } catch (err) {
                     if (err instanceof TokenExhaustedError) {
                         log(`Token "${tok.label}" exhausted — rotating. (${err.message})`);

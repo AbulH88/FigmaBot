@@ -65,3 +65,16 @@ test('validateConfig drops unknown filter keys', () => {
     assert.strictEqual('bogus' in r.config.filters, false);
     assert.strictEqual(r.config.filters.maxAgeDays, 14);
 });
+
+test('validateConfig accepts creators-only niche and normalizes @handles', () => {
+    const r = validateConfig({ niches: { usa: { creators: ['@Dancer.One', ' modelTwo ', 'bad handle!'], dailyQuota: 5 } } });
+    assert.strictEqual(r.ok, true);
+    assert.deepStrictEqual(r.config.niches.usa.creators, ['dancer.one', 'modeltwo']);
+    assert.deepStrictEqual(r.config.niches.usa.hashtags, []);
+});
+
+test('validateConfig rejects niche with neither hashtags nor creators', () => {
+    const r = validateConfig({ niches: { empty: { hashtags: [], creators: [], dailyQuota: 5 } } });
+    assert.strictEqual(r.ok, false);
+    assert.match(r.errors.join(' '), /at least one hashtag or creator/);
+});

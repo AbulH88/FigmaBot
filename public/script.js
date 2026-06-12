@@ -516,6 +516,13 @@ function renderNiches() {
         tags.value = niche.hashtags.join(', ');
         tags.placeholder = 'hashtags, comma separated';
 
+        const creators = document.createElement('input');
+        creators.type = 'text';
+        creators.className = 'niche-creators';
+        creators.value = (niche.creators || []).join(', ');
+        creators.placeholder = 'creators (@user, comma separated) — overrides hashtags';
+        creators.title = 'When set, reels come from these accounts instead of hashtag discovery';
+
         const quota = document.createElement('input');
         quota.type = 'number';
         quota.className = 'niche-quota';
@@ -534,7 +541,7 @@ function renderNiches() {
             renderNiches();
         });
 
-        row.append(label, tags, quota, del);
+        row.append(label, tags, creators, quota, del);
         nicheList.appendChild(row);
     });
 }
@@ -544,6 +551,7 @@ function collectNichesFromDom() {
     nicheList.querySelectorAll('.niche-row').forEach(row => {
         niches[row.dataset.niche] = {
             hashtags: row.querySelector('.niche-hashtags').value.split(',').map(s => s.trim()).filter(Boolean),
+            creators: row.querySelector('.niche-creators').value.split(',').map(s => s.trim()).filter(Boolean),
             dailyQuota: parseInt(row.querySelector('.niche-quota').value, 10)
         };
     });
@@ -572,7 +580,7 @@ document.getElementById('niche-add').addEventListener('click', () => {
     if (!/^[a-z0-9_-]+$/.test(name)) return toast('Niche name: letters/numbers/dashes only', 'error');
     if (scraperCfg.niches[name]) return toast('Niche already exists', 'error');
     collectNichesFromDom();
-    scraperCfg.niches[name] = { hashtags: [], dailyQuota: 5 };
+    scraperCfg.niches[name] = { hashtags: [], creators: [], dailyQuota: 5 };
     document.getElementById('niche-name').value = '';
     renderNiches();
 });
