@@ -8,6 +8,8 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const { parseProxyUrl, validateProxy } = require('./proxyCheck');
 const multer = require('multer');
+const scraperTokens = require('./scraper/tokens');
+const scraperConfig = require('./scraper/config');
 
 const app = express();
 const server = http.createServer(app);
@@ -270,9 +272,114 @@ app.delete('/api/accounts', (req, res) => {
     res.json({ success: true });
 });
 
+// ---------------- Reel Scraper ----------------
+let scraperProcess = null;
+let scraperLastRun = null; // { startedAt, finishedAt, code }
+
+function publicTokens() {
+    const month = scraperTokens.currentMonth();
+    return scraperTokens.loadTokens().map(t => ({
+        label: t.label,
+        masked: scraperTokens.maskToken(t.token),
+        enabled: t.enabled,
+        exhausted: scraperTokens.isExhausted(t, month)
+    }));
+}
+
+// Shared wrapper: load -> mutate -> save -> respond. Token values never leave the server unmasked.
+function mutateTokens(res, fn) {
+    try {
+        const tokens = scraperTokens.loadTokens();
+        fn(tokens);
+        scraperTokens.saveTokens(tokens);
+        res.json({ success: true, tokens: publicTokens() });
+    } catch (err) {
+        res.json({ success: false, error: err.message });
+    }
+}
+
+app.get('/api/scraper/tokens', (req, res) => res.json(publicTokens()));
+
+app.post('/api/scraper/tokens', (req, res) =>
+    mutateTokens(res, tokens => scraperTokens.addToken(tokens, req.body || {})));
+
+app.delete('/api/scraper/tokens', (req, res) =>
+    mutateTokens(res, tokens => scraperTokens.removeToken(tokens, (req.body || {}).label)));
+
+app.post('/api/scraper/tokens/toggle', (req, res) =>
+    mutateTokens(res, tokens => scraperTokens.toggleToken(tokens, (req.body || {}).label)));
+
+app.post('/api/scraper/tokens/move', (req, res) =>
+    mutateTokens(res, tokens => scraperTokens.moveToken(tokens, (req.body || {}).label, (req.body || {}).direction)));
+
+app.get('/api/scraper/config', (req, res) => {
+    try {
+        res.json(scraperConfig.loadConfig());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/scraper/config', (req, res) => {
+    const result = scraperConfig.validateConfig(req.body);
+    if (!result.ok) return res.json({ success: false, error: result.errors.join('; ') });
+    scraperConfig.saveConfig(result.config);
+    res.json({ success: true });
+});
+
+app.post('/api/scraper/run', (req, res) => {
+    if (scraperProcess) {
+        return res.json({ success: false, error: 'Scraper is already running.' });
+    }
+    scraperLastRun = { startedAt: new Date().toISOString(), finishedAt: null, code: null };
+    scraperProcess = spawn('node', [path.join(__dirname, 'scraper', 'run.js')], {
+        detached: process.platform !== 'win32'
+    });
+    scraperProcess.stdout.on('data', d => io.emit('scraperLog', d.toString()));
+    scraperProcess.stderr.on('data', d => io.emit('scraperLog', `[ERROR] ${d.toString()}`));
+    scraperProcess.on('close', (code) => {
+        scraperLastRun.finishedAt = new Date().toISOString();
+        scraperLastRun.code = code;
+        io.emit('scraperLog', `\n[SYSTEM] Scraper finished with code ${code}\n`);
+        scraperProcess = null;
+        io.emit('scraperStatus', false);
+    });
+    io.emit('scraperStatus', true);
+    res.json({ success: true });
+});
+
+app.get('/api/scraper/status', (req, res) => {
+    res.json({ running: !!scraperProcess, lastRun: scraperLastRun });
+});
+
+app.get('/api/scraper/downloads', (req, res) => {
+    const base = path.join(__dirname, 'downloads');
+    const out = [];
+    if (fs.existsSync(base)) {
+        for (const niche of fs.readdirSync(base)) {
+            const nicheDir = path.join(base, niche);
+            if (!fs.statSync(nicheDir).isDirectory()) continue;
+            for (const date of fs.readdirSync(nicheDir)) {
+                const dateDir = path.join(nicheDir, date);
+                if (!fs.statSync(dateDir).isDirectory()) continue;
+                for (const f of fs.readdirSync(dateDir)) {
+                    if (!f.endsWith('.json')) continue;
+                    try {
+                        const meta = JSON.parse(fs.readFileSync(path.join(dateDir, f), 'utf8'));
+                        out.push(Object.assign({ niche, date, file: f.replace(/\.json$/, '.mp4') }, meta));
+                    } catch (e) { /* skip unreadable sidecar */ }
+                }
+            }
+        }
+    }
+    out.sort((a, b) => String(b.downloadedAt || '').localeCompare(String(a.downloadedAt || '')));
+    res.json(out.slice(0, 100));
+});
+
 // Socket connection
 io.on('connection', (socket) => {
     socket.emit('botStatus', !!botProcess);
+    socket.emit('scraperStatus', !!scraperProcess);
 });
 
 const PORT = process.env.PORT || 3000;

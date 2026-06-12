@@ -1,0 +1,33 @@
+{
+  "niches": {
+    "dance": {
+      "hashtags": [
+        "dancechallenge",
+        "choreography"
+      ],
+      "dailyQuota": 8
+    },
+    "fashion": {
+      "hashtags": [
+        "modelpose",
+        "fashionreels"
+      ],
+      "dailyQuota": 8
+    },
+    "lifestyle": {
+      "hashtags": [
+        "grwm",
+        "dayinmylife"
+      ],
+      "dailyQuota": 7
+    }
+  },
+  "resultsPerHashtag": 8,
+  "maxResultsPerRun": 70,
+  "filters": {
+    "minPlays": 10000,
+    "maxAgeDays": 14,
+    "maxDurationSec": 60
+  },
+  "retentionDays": 60
+}

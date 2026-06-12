@@ -28,6 +28,9 @@
                 <a href="#accounts" class="nav-link" data-view="accounts">
                     <span class="nav-icon">▸</span> Accounts
                 </a>
+                <a href="#scraper" class="nav-link" data-view="scraper">
+                    <span class="nav-icon">▸</span> Reel Scraper
+                </a>
                 <a href="#settings" class="nav-link" data-view="settings">
                     <span class="nav-icon">▸</span> Settings
                 </a>
@@ -174,6 +177,80 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Save Settings</button>
                     </form>
+                </div>
+            </section>
+
+            <!-- Reel Scraper view -->
+            <section class="view" id="view-scraper" hidden>
+                <div class="view-header">
+                    <h1 class="view-title">Reel Scraper</h1>
+                    <div class="view-actions">
+                        <button id="scraper-run" class="btn btn-success">▶ Run Now</button>
+                    </div>
+                </div>
+
+                <div class="card glass-card">
+                    <h2>Apify Tokens <span class="count-badge" id="token-count">0</span></h2>
+                    <div class="inline-form">
+                        <input type="text" id="token-label" placeholder="Label (e.g. gmail-1)">
+                        <input type="password" id="token-value" placeholder="Apify API token">
+                        <button id="token-add" class="btn btn-primary">Add Token</button>
+                    </div>
+                    <ul id="token-list" class="proxy-list"></ul>
+                </div>
+
+                <div class="card glass-card">
+                    <h2>Niches &amp; Filters</h2>
+                    <div id="niche-list"></div>
+                    <div class="inline-form">
+                        <input type="text" id="niche-name" placeholder="New niche name (e.g. fitness)">
+                        <button id="niche-add" class="btn btn-secondary">+ Add Niche</button>
+                    </div>
+                    <div class="form-grid scraper-filters">
+                        <div class="input-group">
+                            <label for="f-minPlays">Min plays</label>
+                            <input type="number" id="f-minPlays" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="f-maxAgeDays">Max age (days)</label>
+                            <input type="number" id="f-maxAgeDays" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="f-maxDurationSec">Max duration (sec)</label>
+                            <input type="number" id="f-maxDurationSec" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label for="f-resultsPerHashtag">Results per hashtag</label>
+                            <input type="number" id="f-resultsPerHashtag" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label for="f-maxResultsPerRun">Max results per run</label>
+                            <input type="number" id="f-maxResultsPerRun" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label for="f-retentionDays">Retention (days)</label>
+                            <input type="number" id="f-retentionDays" min="1">
+                        </div>
+                    </div>
+                    <button id="scraper-save-config" class="btn btn-primary">Save Config</button>
+                </div>
+
+                <div class="terminal-container glass-card">
+                    <div class="terminal-header">
+                        <span>Scraper Logs</span>
+                        <button id="scraper-clear-logs" class="btn btn-ghost btn-sm">Clear</button>
+                    </div>
+                    <pre id="scraper-terminal" class="terminal"></pre>
+                </div>
+
+                <div class="card glass-card accounts-table-container">
+                    <h2>Recent Downloads <span class="count-badge" id="download-count">0</span></h2>
+                    <table>
+                        <thead>
+                            <tr><th>Niche</th><th>Creator</th><th>Plays</th><th>Date</th><th>File</th></tr>
+                        </thead>
+                        <tbody id="downloads-body"></tbody>
+                    </table>
                 </div>
             </section>
 
