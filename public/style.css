@@ -651,3 +651,47 @@ tr:last-child td { border-bottom: none; }
 
     .proxy-container { grid-template-columns: 1fr; }
 }
+
+/* ---------- Reel Scraper ---------- */
+.inline-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.inline-form input {
+    flex: 1;
+    min-width: 140px;
+}
+
+.token-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.niche-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.niche-name {
+    min-width: 90px;
+    font-weight: 600;
+}
+
+.niche-hashtags {
+    flex: 1;
+}
+
+.niche-quota {
+    width: 80px;
+}
+
+.scraper-filters {
+    margin-top: 14px;
+    margin-bottom: 14px;
+}

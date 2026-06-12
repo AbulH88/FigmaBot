@@ -17,7 +17,7 @@ async function api(url, options) {
 }
 
 // ---------- Routing ----------
-const VIEWS = ['dashboard', 'proxies', 'accounts', 'settings'];
+const VIEWS = ['dashboard', 'proxies', 'accounts', 'settings', 'scraper'];
 
 function showView(name) {
     if (!VIEWS.includes(name)) name = 'dashboard';
@@ -29,6 +29,7 @@ function showView(name) {
     });
     if (name === 'accounts' || name === 'dashboard') loadAccounts();
     if (name === 'proxies' || name === 'dashboard') loadProxies();
+    if (name === 'scraper') { loadScraperTokens(); loadScraperConfig(); loadDownloads(); }
 }
 
 window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
@@ -391,6 +392,242 @@ document.getElementById('export-accounts').addEventListener('click', () => {
     a.click();
     URL.revokeObjectURL(a.href);
 });
+
+// ---------- Reel Scraper ----------
+const scraperTerminal = document.getElementById('scraper-terminal');
+const btnScraperRun = document.getElementById('scraper-run');
+const tokenList = document.getElementById('token-list');
+const nicheList = document.getElementById('niche-list');
+const downloadsBody = document.getElementById('downloads-body');
+
+socket.on('scraperStatus', (running) => {
+    btnScraperRun.disabled = running;
+    btnScraperRun.textContent = running ? '⏳ Running…' : '▶ Run Now';
+    if (!running) setTimeout(() => { loadDownloads(); loadScraperTokens(); }, 1500);
+});
+
+socket.on('scraperLog', (msg) => {
+    scraperTerminal.textContent += msg;
+    scraperTerminal.scrollTop = scraperTerminal.scrollHeight;
+});
+
+btnScraperRun.addEventListener('click', async () => {
+    try {
+        scraperTerminal.textContent = '';
+        const data = await api('/api/scraper/run', { method: 'POST' });
+        if (!data.success) toast(data.error || 'Failed to start scraper', 'error');
+    } catch (err) {
+        toast(`Failed to start scraper: ${err.message}`, 'error');
+    }
+});
+
+document.getElementById('scraper-clear-logs').addEventListener('click', () => {
+    scraperTerminal.textContent = '';
+});
+
+// --- Tokens ---
+function renderTokens(tokens) {
+    document.getElementById('token-count').textContent = tokens.length;
+    tokenList.innerHTML = '';
+    tokens.forEach((t, idx) => {
+        const li = document.createElement('li');
+
+        const name = document.createElement('span');
+        name.textContent = `${t.label} (${t.masked})`;
+
+        const right = document.createElement('span');
+        right.className = 'token-actions';
+
+        const badge = document.createElement('span');
+        badge.className = `proxy-status ${!t.enabled ? 'pending' : t.exhausted ? 'bad' : 'good'}`;
+        badge.textContent = !t.enabled ? 'Disabled' : t.exhausted ? 'Exhausted' : 'Active';
+
+        const mk = (txt, title, fn, disabled = false) => {
+            const b = document.createElement('button');
+            b.className = 'btn btn-ghost btn-sm';
+            b.textContent = txt;
+            b.title = title;
+            b.disabled = disabled;
+            b.addEventListener('click', fn);
+            return b;
+        };
+        right.append(
+            badge,
+            mk('↑', 'Move up', () => tokenAction('/api/scraper/tokens/move', { label: t.label, direction: 'up' }), idx === 0),
+            mk('↓', 'Move down', () => tokenAction('/api/scraper/tokens/move', { label: t.label, direction: 'down' }), idx === tokens.length - 1),
+            mk(t.enabled ? '⏸' : '▶', t.enabled ? 'Disable' : 'Enable', () => tokenAction('/api/scraper/tokens/toggle', { label: t.label })),
+            mk('✕', 'Delete', () => {
+                if (confirm(`Delete token "${t.label}"?`)) tokenAction('/api/scraper/tokens', { label: t.label }, 'DELETE');
+            })
+        );
+        li.append(name, right);
+        tokenList.appendChild(li);
+    });
+}
+
+async function tokenAction(url, body, method = 'POST') {
+    try {
+        const data = await api(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!data.success) return toast(data.error || 'Token action failed', 'error');
+        renderTokens(data.tokens);
+    } catch (err) {
+        toast(`Token action failed: ${err.message}`, 'error');
+    }
+}
+
+async function loadScraperTokens() {
+    try {
+        renderTokens(await api('/api/scraper/tokens'));
+    } catch (err) {
+        toast(`Failed to load tokens: ${err.message}`, 'error');
+    }
+}
+
+document.getElementById('token-add').addEventListener('click', async () => {
+    const label = document.getElementById('token-label').value.trim();
+    const token = document.getElementById('token-value').value.trim();
+    if (!label || !token) return toast('Label and token are both required', 'error');
+    await tokenAction('/api/scraper/tokens', { label, token });
+    document.getElementById('token-label').value = '';
+    document.getElementById('token-value').value = '';
+});
+
+// --- Config (niches + filters) ---
+let scraperCfg = null;
+
+function renderNiches() {
+    nicheList.innerHTML = '';
+    Object.entries(scraperCfg.niches).forEach(([name, niche]) => {
+        const row = document.createElement('div');
+        row.className = 'niche-row';
+        row.dataset.niche = name;
+
+        const label = document.createElement('span');
+        label.className = 'niche-name';
+        label.textContent = name;
+
+        const tags = document.createElement('input');
+        tags.type = 'text';
+        tags.className = 'niche-hashtags';
+        tags.value = niche.hashtags.join(', ');
+        tags.placeholder = 'hashtags, comma separated';
+
+        const quota = document.createElement('input');
+        quota.type = 'number';
+        quota.className = 'niche-quota';
+        quota.min = '1';
+        quota.value = niche.dailyQuota;
+        quota.title = 'Daily download quota';
+
+        const del = document.createElement('button');
+        del.className = 'btn btn-danger btn-sm';
+        del.textContent = '✕';
+        del.addEventListener('click', () => {
+            // Sync current DOM edits into scraperCfg before re-rendering so
+            // unsaved hashtag/quota edits on other rows aren't lost
+            collectNichesFromDom();
+            delete scraperCfg.niches[name];
+            renderNiches();
+        });
+
+        row.append(label, tags, quota, del);
+        nicheList.appendChild(row);
+    });
+}
+
+function collectNichesFromDom() {
+    const niches = {};
+    nicheList.querySelectorAll('.niche-row').forEach(row => {
+        niches[row.dataset.niche] = {
+            hashtags: row.querySelector('.niche-hashtags').value.split(',').map(s => s.trim()).filter(Boolean),
+            dailyQuota: parseInt(row.querySelector('.niche-quota').value, 10)
+        };
+    });
+    scraperCfg.niches = niches;
+    return niches;
+}
+
+async function loadScraperConfig() {
+    try {
+        scraperCfg = await api('/api/scraper/config');
+        renderNiches();
+        document.getElementById('f-minPlays').value = scraperCfg.filters.minPlays;
+        document.getElementById('f-maxAgeDays').value = scraperCfg.filters.maxAgeDays;
+        document.getElementById('f-maxDurationSec').value = scraperCfg.filters.maxDurationSec;
+        document.getElementById('f-resultsPerHashtag').value = scraperCfg.resultsPerHashtag;
+        document.getElementById('f-maxResultsPerRun').value = scraperCfg.maxResultsPerRun;
+        document.getElementById('f-retentionDays').value = scraperCfg.retentionDays;
+    } catch (err) {
+        toast(`Failed to load scraper config: ${err.message}`, 'error');
+    }
+}
+
+document.getElementById('niche-add').addEventListener('click', () => {
+    const name = document.getElementById('niche-name').value.trim().toLowerCase();
+    if (!name) return;
+    if (!/^[a-z0-9_-]+$/.test(name)) return toast('Niche name: letters/numbers/dashes only', 'error');
+    if (scraperCfg.niches[name]) return toast('Niche already exists', 'error');
+    collectNichesFromDom();
+    scraperCfg.niches[name] = { hashtags: [], dailyQuota: 5 };
+    document.getElementById('niche-name').value = '';
+    renderNiches();
+});
+
+document.getElementById('scraper-save-config').addEventListener('click', async () => {
+    const body = {
+        niches: collectNichesFromDom(),
+        resultsPerHashtag: parseInt(document.getElementById('f-resultsPerHashtag').value, 10),
+        maxResultsPerRun: parseInt(document.getElementById('f-maxResultsPerRun').value, 10),
+        retentionDays: parseInt(document.getElementById('f-retentionDays').value, 10),
+        filters: {
+            minPlays: parseInt(document.getElementById('f-minPlays').value, 10),
+            maxAgeDays: parseInt(document.getElementById('f-maxAgeDays').value, 10),
+            maxDurationSec: parseInt(document.getElementById('f-maxDurationSec').value, 10)
+        }
+    };
+    try {
+        const data = await api('/api/scraper/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!data.success) return toast(data.error || 'Invalid config', 'error');
+        toast('Scraper config saved', 'success');
+        await loadScraperConfig();
+    } catch (err) {
+        toast(`Failed to save config: ${err.message}`, 'error');
+    }
+});
+
+// --- Downloads ---
+async function loadDownloads() {
+    try {
+        const items = await api('/api/scraper/downloads');
+        document.getElementById('download-count').textContent = items.length;
+        downloadsBody.innerHTML = '';
+        if (items.length === 0) {
+            downloadsBody.innerHTML =
+                '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No downloads yet.</td></tr>';
+            return;
+        }
+        items.forEach(it => {
+            const tr = document.createElement('tr');
+            [it.niche, it.creator, (it.plays || 0).toLocaleString(), it.date, it.file].forEach(v => {
+                const td = document.createElement('td');
+                td.textContent = v == null ? '-' : v;
+                tr.appendChild(td);
+            });
+            downloadsBody.appendChild(tr);
+        });
+    } catch (err) {
+        downloadsBody.innerHTML =
+            '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load downloads.</td></tr>';
+    }
+}
 
 // ---------- Init ----------
 async function init() {
