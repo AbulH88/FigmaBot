@@ -14,10 +14,32 @@ function datestamp(now = new Date()) {
     return now.toISOString().slice(0, 10);
 }
 
-async function downloadReel(item, { niche, baseDir = DOWNLOADS_DIR, http = axios, now = new Date() }) {
+function targetDir(item, niche, baseDir, now) {
     const dir = path.join(baseDir, sanitize(niche), datestamp(now));
     fs.mkdirSync(dir, { recursive: true });
-    const base = `${sanitize(item.creator)}_${sanitize(item.shortcode)}`;
+    return { dir, base: `${sanitize(item.creator)}_${sanitize(item.shortcode)}` };
+}
+
+function buildSidecar(item, niche, now) {
+    return {
+        shortcode: item.shortcode,
+        creator: item.creator,
+        plays: item.plays,
+        likes: item.likes,
+        durationSec: item.durationSec,
+        timestamp: item.timestamp,
+        pageUrl: item.pageUrl,
+        // Direct CDN URL — note: Instagram signs these, they expire within days.
+        // pageUrl is the permanent reference for manual downloads.
+        videoUrl: item.videoUrl,
+        caption: item.caption,
+        niche,
+        downloadedAt: now.toISOString()
+    };
+}
+
+async function downloadReel(item, { niche, baseDir = DOWNLOADS_DIR, http = axios, now = new Date() }) {
+    const { dir, base } = targetDir(item, niche, baseDir, now);
     const filePath = path.join(dir, `${base}.mp4`);
     const tmpPath = filePath + '.tmp';
 
@@ -30,20 +52,18 @@ async function downloadReel(item, { niche, baseDir = DOWNLOADS_DIR, http = axios
         throw err;
     }
 
-    const sidecar = {
-        shortcode: item.shortcode,
-        creator: item.creator,
-        plays: item.plays,
-        likes: item.likes,
-        durationSec: item.durationSec,
-        timestamp: item.timestamp,
-        pageUrl: item.pageUrl,
-        caption: item.caption,
-        niche,
-        downloadedAt: now.toISOString()
-    };
-    fs.writeFileSync(path.join(dir, `${base}.json`), JSON.stringify(sidecar, null, 2) + '\n');
+    fs.writeFileSync(path.join(dir, `${base}.json`),
+        JSON.stringify(buildSidecar(item, niche, now), null, 2) + '\n');
     return filePath;
+}
+
+// Links-only mode: write just the metadata sidecar (with pageUrl for manual
+// download later) — no video file, no disk weight.
+function saveReelMeta(item, { niche, baseDir = DOWNLOADS_DIR, now = new Date() }) {
+    const { dir, base } = targetDir(item, niche, baseDir, now);
+    const metaPath = path.join(dir, `${base}.json`);
+    fs.writeFileSync(metaPath, JSON.stringify(buildSidecar(item, niche, now), null, 2) + '\n');
+    return metaPath;
 }
 
 // Deletes downloads/<niche>/<YYYY-MM-DD>/ older than retentionDays; prunes emptied niche dirs.
@@ -67,4 +87,4 @@ function sweepRetention(baseDir = DOWNLOADS_DIR, retentionDays, now = new Date()
     return removed;
 }
 
-module.exports = { DOWNLOADS_DIR, downloadReel, sweepRetention, sanitize, datestamp };
+module.exports = { DOWNLOADS_DIR, downloadReel, saveReelMeta, sweepRetention, sanitize, datestamp };

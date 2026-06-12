@@ -82,3 +82,15 @@ test('downloadReel cleans up temp file when the stream fails mid-transfer', asyn
     const dir = path.join(base, 'dance', '2026-06-11');
     assert.deepStrictEqual(fs.readdirSync(dir), []); // no .mp4, no .tmp, no sidecar
 });
+
+test('saveReelMeta writes sidecar with pageUrl and no mp4', () => {
+    const { saveReelMeta } = require("../download");
+    const base = tmpdir();
+    const metaPath = saveReelMeta(ITEM, { niche: "dance", baseDir: base, now: NOW });
+    assert.strictEqual(metaPath, path.join(base, "dance", "2026-06-11", "dancer.girl_ABC123.json"));
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    assert.strictEqual(meta.pageUrl, "https://www.instagram.com/reel/ABC123/");
+    assert.strictEqual(meta.shortcode, "ABC123");
+    const dir = path.join(base, "dance", "2026-06-11");
+    assert.deepStrictEqual(fs.readdirSync(dir), ["dancer.girl_ABC123.json"]); // no .mp4
+});

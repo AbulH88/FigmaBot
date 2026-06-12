@@ -366,7 +366,11 @@ app.get('/api/scraper/downloads', (req, res) => {
                     if (!f.endsWith('.json')) continue;
                     try {
                         const meta = JSON.parse(fs.readFileSync(path.join(dateDir, f), 'utf8'));
-                        out.push(Object.assign({ niche, date, file: f.replace(/\.json$/, '.mp4') }, meta));
+                        const mp4 = f.replace(/\.json$/, '.mp4');
+                        out.push(Object.assign({
+                            niche, date, file: mp4,
+                            hasVideo: fs.existsSync(path.join(dateDir, mp4))
+                        }, meta));
                     } catch (e) { /* skip unreadable sidecar */ }
                 }
             }

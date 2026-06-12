@@ -569,6 +569,7 @@ async function loadScraperConfig() {
         document.getElementById('f-resultsPerHashtag').value = scraperCfg.resultsPerHashtag;
         document.getElementById('f-maxResultsPerRun').value = scraperCfg.maxResultsPerRun;
         document.getElementById('f-retentionDays').value = scraperCfg.retentionDays;
+        document.getElementById('f-downloadVideos').checked = scraperCfg.downloadVideos !== false;
     } catch (err) {
         toast(`Failed to load scraper config: ${err.message}`, 'error');
     }
@@ -591,6 +592,7 @@ document.getElementById('scraper-save-config').addEventListener('click', async (
         resultsPerHashtag: parseInt(document.getElementById('f-resultsPerHashtag').value, 10),
         maxResultsPerRun: parseInt(document.getElementById('f-maxResultsPerRun').value, 10),
         retentionDays: parseInt(document.getElementById('f-retentionDays').value, 10),
+        downloadVideos: document.getElementById('f-downloadVideos').checked,
         filters: {
             minPlays: parseInt(document.getElementById('f-minPlays').value, 10),
             maxAgeDays: parseInt(document.getElementById('f-maxAgeDays').value, 10),
@@ -624,11 +626,26 @@ async function loadDownloads() {
         }
         items.forEach(it => {
             const tr = document.createElement('tr');
-            [it.niche, it.creator, (it.plays || 0).toLocaleString(), it.date, it.file].forEach(v => {
+            [it.niche, it.creator, (it.plays || 0).toLocaleString(), it.date].forEach(v => {
                 const td = document.createElement('td');
                 td.textContent = v == null ? '-' : v;
                 tr.appendChild(td);
             });
+            // Reel column: link to the Instagram page (permanent), plus the
+            // local filename when the MP4 was downloaded to the server.
+            const tdReel = document.createElement('td');
+            if (it.pageUrl) {
+                const a = document.createElement('a');
+                a.href = it.pageUrl;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.className = 'reel-link';
+                a.textContent = it.hasVideo ? it.file : 'Open reel ↗';
+                tdReel.appendChild(a);
+            } else {
+                tdReel.textContent = it.file || '-';
+            }
+            tr.appendChild(tdReel);
             downloadsBody.appendChild(tr);
         });
     } catch (err) {

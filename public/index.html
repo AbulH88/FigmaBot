@@ -232,6 +232,10 @@
                             <input type="number" id="f-retentionDays" min="1">
                         </div>
                     </div>
+                    <label class="toggle-row" for="f-downloadVideos">
+                        <input type="checkbox" id="f-downloadVideos">
+                        Download MP4s to server (uncheck = save reel links only, no disk space used)
+                    </label>
                     <button id="scraper-save-config" class="btn btn-primary">Save Config</button>
                 </div>
 
@@ -247,7 +251,7 @@
                     <h2>Recent Downloads <span class="count-badge" id="download-count">0</span></h2>
                     <table>
                         <thead>
-                            <tr><th>Niche</th><th>Creator</th><th>Plays</th><th>Date</th><th>File</th></tr>
+                            <tr><th>Niche</th><th>Creator</th><th>Plays</th><th>Date</th><th>Reel</th></tr>
                         </thead>
                         <tbody id="downloads-body"></tbody>
                     </table>

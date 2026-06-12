@@ -5,7 +5,7 @@ const { loadConfig } = require('./config');
 const tokensLib = require('./tokens');
 const { discoverNiche, discoverCreators, TokenExhaustedError } = require('./discover');
 const { selectReels } = require('./select');
-const { downloadReel, sweepRetention, DOWNLOADS_DIR } = require('./download');
+const { downloadReel, saveReelMeta, sweepRetention, DOWNLOADS_DIR } = require('./download');
 const state = require('./state');
 
 function log(msg) {
@@ -95,6 +95,21 @@ async function main() {
         let ok = 0, failed = 0;
         for (const [niche, items] of Object.entries(picked)) {
             for (const item of items) {
+                // Links-only mode: record metadata + reel URL, skip the MP4.
+                if (!config.downloadVideos) {
+                    try {
+                        saveReelMeta(item, { niche });
+                        downloaded.add(item.shortcode);
+                        state.saveDownloaded(downloaded);
+                        log(`Saved link [${niche}] ${item.creator}/${item.shortcode} (${item.plays} plays) -> ${item.pageUrl}`);
+                        ok++;
+                    } catch (err) {
+                        log(`Saving link failed ${item.shortcode}: ${err.message}`);
+                        failed++;
+                    }
+                    continue;
+                }
+
                 let done = false;
                 for (let attempt = 1; attempt <= 2 && !done; attempt++) {
                     try {

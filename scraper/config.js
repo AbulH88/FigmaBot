@@ -13,7 +13,8 @@ const DEFAULTS = {
     resultsPerHashtag: 8,
     maxResultsPerRun: 70,
     filters: { minPlays: 10000, maxAgeDays: 14, maxDurationSec: 60 },
-    retentionDays: 60
+    retentionDays: 60,
+    downloadVideos: true // false = save metadata + reel link only (no MP4 on disk)
 };
 
 function isPosInt(n) { return Number.isInteger(n) && n > 0; }
@@ -32,8 +33,10 @@ function validateConfig(raw) {
         filters: Object.fromEntries(FILTER_KEYS.map(k => [k,
             raw.filters && raw.filters[k] !== undefined ? raw.filters[k] : DEFAULTS.filters[k]
         ])),
-        retentionDays: raw.retentionDays !== undefined ? raw.retentionDays : DEFAULTS.retentionDays
+        retentionDays: raw.retentionDays !== undefined ? raw.retentionDays : DEFAULTS.retentionDays,
+        downloadVideos: raw.downloadVideos !== undefined ? raw.downloadVideos : DEFAULTS.downloadVideos
     };
+    if (typeof cfg.downloadVideos !== 'boolean') errors.push('downloadVideos must be true or false');
 
     const niches = raw.niches || {};
     if (Object.keys(niches).length === 0) errors.push('at least one niche is required');

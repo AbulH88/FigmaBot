@@ -78,3 +78,16 @@ test('validateConfig rejects niche with neither hashtags nor creators', () => {
     assert.strictEqual(r.ok, false);
     assert.match(r.errors.join(' '), /at least one hashtag or creator/);
 });
+
+test('downloadVideos defaults to true, accepts false, rejects non-boolean', () => {
+    const def = validateConfig({ niches: { dance: { hashtags: ["x"], dailyQuota: 3 } } });
+    assert.strictEqual(def.config.downloadVideos, true);
+
+    const off = validateConfig({ niches: { dance: { hashtags: ["x"], dailyQuota: 3 } }, downloadVideos: false });
+    assert.strictEqual(off.ok, true);
+    assert.strictEqual(off.config.downloadVideos, false);
+
+    const bad = validateConfig({ niches: { dance: { hashtags: ["x"], dailyQuota: 3 } }, downloadVideos: "yes" });
+    assert.strictEqual(bad.ok, false);
+    assert.match(bad.errors.join(" "), /downloadVideos/);
+});
