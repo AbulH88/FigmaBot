@@ -2,9 +2,10 @@
   "name": "figmabot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
+    "electron": "electron .",
     "test": "node --test test/*.test.js scraper/test/*.test.js"
   },
   "keywords": [],
@@ -27,5 +28,8 @@
     "proxy-agent": "^8.0.2",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1"
   }
 }
