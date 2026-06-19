@@ -1,8 +1,7 @@
 // scraper/tokens.js — ordered Apify token store with monthly-exhaustion rotation.
 const fs = require('fs');
-const path = require('path');
 
-const TOKENS_PATH = path.join(__dirname, 'apify_tokens.json');
+const TOKENS_PATH = require('../paths').tokensJson;
 
 function loadTokens(file = TOKENS_PATH) {
     if (!fs.existsSync(file)) return [];

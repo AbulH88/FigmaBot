@@ -1,5 +1,5 @@
 // scraper/run.js — orchestrator. Invoked daily by cron and by the dashboard "Run now".
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({ path: require('../paths').envPath });
 
 const { loadConfig } = require('./config');
 const tokensLib = require('./tokens');

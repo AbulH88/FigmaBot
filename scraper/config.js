@@ -1,8 +1,7 @@
 // scraper/config.js — load/validate/save the scraper configuration.
 const fs = require('fs');
-const path = require('path');
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
+const CONFIG_PATH = require('../paths').configJson;
 
 const DEFAULTS = {
     niches: {
