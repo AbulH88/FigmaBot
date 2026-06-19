@@ -119,9 +119,32 @@ app.post('/api/check-proxy', async (req, res) => {
 });
 
 // Endpoints for Bot Control
+
+// Spawn bot.js and wire its output to the dashboard. detached on POSIX puts
+// the bot in its own process group so stop can kill the whole tree.
+function spawnBot() {
+    botProcess = spawn('node', ['bot.js'], { detached: process.platform !== 'win32' });
+    botProcess.stdout.on('data', (data) => io.emit('log', data.toString()));
+    botProcess.stderr.on('data', (data) => io.emit('log', `[ERROR] ${data.toString()}`));
+    botProcess.on('close', (code) => {
+        io.emit('log', `\n[SYSTEM] Bot stopped with code ${code}\n`);
+        botProcess = null;
+        io.emit('botStatus', false);
+    });
+    io.emit('botStatus', true);
+}
+
 app.post('/api/bot/start', async (req, res) => {
     if (botProcess) {
         return res.json({ success: false, error: 'Bot is already running.' });
+    }
+
+    // Local mode: user routes traffic through their own router/VPN, so skip the
+    // proxy list and pre-flight entirely and run on the server's connection.
+    if ((process.env.PROXY_MODE || 'list').toLowerCase() === 'local') {
+        io.emit('log', "[*] Local connection mode — skipping proxy validation; bot runs on this server's IP (your router/VPN must provide a safe exit).\n");
+        spawnBot();
+        return res.json({ success: true });
     }
 
     // --- Pre-flight: validate proxies before the bot creates anything ----
@@ -168,25 +191,7 @@ app.post('/api/bot/start', async (req, res) => {
     }
     io.emit('log', `[+] ${good.length}/${proxies.length} proxies OK — starting bot.\n`);
 
-    // detached on POSIX puts the bot in its own process group so stop can
-    // kill the whole tree (Playwright's Chromium included) via kill(-pid)
-    botProcess = spawn('node', ['bot.js'], { detached: process.platform !== 'win32' });
-
-    botProcess.stdout.on('data', (data) => {
-        io.emit('log', data.toString());
-    });
-
-    botProcess.stderr.on('data', (data) => {
-        io.emit('log', `[ERROR] ${data.toString()}`);
-    });
-
-    botProcess.on('close', (code) => {
-        io.emit('log', `\n[SYSTEM] Bot stopped with code ${code}\n`);
-        botProcess = null;
-        io.emit('botStatus', false);
-    });
-
-    io.emit('botStatus', true);
+    spawnBot();
     res.json({ success: true });
 });
 

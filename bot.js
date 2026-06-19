@@ -105,6 +105,11 @@ async function run() {
     }
     console.log(`[+] Loaded ${proxies.length} proxies.`);
 
+    // Local mode: skip proxies and run on this machine's connection (the user
+    // routes the server through their own router/VPN, so the real IP is safe).
+    const localMode = (process.env.PROXY_MODE || 'list').toLowerCase() === 'local';
+    if (localMode) console.log('[+] PROXY_MODE=local — running without proxies (server/router IP).');
+
     // Timezone pool (rotated per account). The rest of the fingerprint —
     // user-agent, screen, navigator props, WebGL/canvas — is generated fresh
     // per account by fingerprint-generator so every account is internally
@@ -128,35 +133,41 @@ async function run() {
         try {
             console.log(`\n--- Starting Account ${i + 1}/${numAccounts} ---`);
 
-            // --- Proxy first, fail-closed ---------------------------------
-            // Never create an account on this machine's real IP. Parse the
-            // proxy, then make a REAL request through it; only continue if it
-            // returns a genuine exit IP. A missing, malformed, or locked proxy
-            // (e.g. ProxyJet "423 Locked") skips the account instead of
-            // silently falling back to the direct connection.
-            const proxyUrl = proxies.length > 0 ? parseProxyUrl(proxies[i % proxies.length]) : null;
-            const proxyObj = proxyUrl ? proxyUrlToPlaywright(proxyUrl) : null;
-            if (!proxyObj || !proxyUrl) {
-                console.error(`[ERROR] [-] No usable proxy for account ${i + 1} — skipping (refusing to run on the real IP).`);
-                appendAccountRecord({ email: prefix, password, status: 'Skipped: no proxy configured' });
-                continue;
+            // --- Connection: local mode, or proxy fail-closed --------------
+            // Local mode runs with no proxy (server/router IP). Otherwise never
+            // create an account on the machine's real IP: parse the proxy, make
+            // a REAL request through it, and only continue if it returns a
+            // genuine exit IP. A missing, malformed, or locked proxy (e.g.
+            // ProxyJet "423 Locked") skips the account instead of silently
+            // falling back to the direct connection.
+            let proxyObj = undefined;
+            let proxyTz = null;
+            if (!localMode) {
+                const proxyUrl = proxies.length > 0 ? parseProxyUrl(proxies[i % proxies.length]) : null;
+                proxyObj = proxyUrl ? proxyUrlToPlaywright(proxyUrl) : undefined;
+                if (!proxyObj || !proxyUrl) {
+                    console.error(`[ERROR] [-] No usable proxy for account ${i + 1} — skipping (refusing to run on the real IP).`);
+                    appendAccountRecord({ email: prefix, password, status: 'Skipped: no proxy configured' });
+                    continue;
+                }
+                console.log(`[+] Validating proxy ${proxyObj.server} before signup...`);
+                const proxyResult = await validateProxy(proxyUrl);
+                if (!proxyResult.ok) {
+                    console.error(`[ERROR] [-] Proxy failed (${proxyResult.error}) — skipping account, NOT creating on the real IP.`);
+                    appendAccountRecord({ email: prefix, password, status: `Skipped: proxy failed (${proxyResult.error})` });
+                    continue;
+                }
+                console.log(`[+] Proxy OK — exit IP ${proxyResult.ip} (${[proxyResult.city, proxyResult.region, proxyResult.country].filter(Boolean).join(', ') || 'geo unknown'})`);
+                proxyTz = proxyResult.timezone;
             }
-            console.log(`[+] Validating proxy ${proxyObj.server} before signup...`);
-            const proxyResult = await validateProxy(proxyUrl);
-            if (!proxyResult.ok) {
-                console.error(`[ERROR] [-] Proxy failed (${proxyResult.error}) — skipping account, NOT creating on the real IP.`);
-                appendAccountRecord({ email: prefix, password, status: `Skipped: proxy failed (${proxyResult.error})` });
-                continue;
-            }
-            console.log(`[+] Proxy OK — exit IP ${proxyResult.ip} (${[proxyResult.city, proxyResult.region, proxyResult.country].filter(Boolean).join(', ') || 'geo unknown'})`);
 
-            // Proxy proven good — now it's safe to create the mailbox.
+            // Connection settled — now it's safe to create the mailbox.
             email = await createDirectAdminEmail(prefix, password);
 
             // Match the browser timezone to the proxy's REAL exit location so an
             // AU/US/etc. IP isn't paired with a mismatched timezone (a bot tell).
-            // Fall back to the random US pool only if the lookup gave nothing.
-            const tz = proxyResult.timezone || timezones[Math.floor(Math.random() * timezones.length)];
+            // Local mode has no proxy geo, so use the random US pool.
+            const tz = proxyTz || timezones[Math.floor(Math.random() * timezones.length)];
 
             // Fresh browser per account = completely isolated fingerprint.
             // newInjectedContext generates a real mobile device fingerprint

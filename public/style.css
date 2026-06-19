@@ -722,3 +722,13 @@ tr:last-child td { border-bottom: none; }
 .reel-link:hover {
     text-decoration: underline;
 }
+
+.mode-note {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.mode-note.warn {
+    color: #fbbf24;
+}

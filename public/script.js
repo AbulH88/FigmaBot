@@ -29,6 +29,7 @@ function showView(name) {
     });
     if (name === 'accounts' || name === 'dashboard') loadAccounts();
     if (name === 'proxies' || name === 'dashboard') loadProxies();
+    if (name === 'proxies') loadProxyMode();
     if (name === 'scraper') { loadScraperTokens(); loadScraperConfig(); loadDownloads(); }
 }
 
@@ -135,6 +136,43 @@ async function loadSettings() {
         toast(`Failed to load settings: ${err.message}`, 'error');
     }
 }
+
+// ---------- Proxy connection mode ----------
+const proxyLocalToggle = document.getElementById('proxy-local-mode');
+const proxyModeNote = document.getElementById('proxy-mode-note');
+const proxyContainer = document.querySelector('.proxy-container');
+
+function applyProxyModeUI(local) {
+    proxyModeNote.textContent = local
+        ? '⚠ Local mode: the bot runs on this server\'s own IP. Make sure your router/VPN routes it through a safe connection.'
+        : 'Proxy mode: the bot validates your proxy list and refuses to start without a working proxy.';
+    proxyModeNote.className = `mode-note ${local ? 'warn' : ''}`;
+    if (proxyContainer) proxyContainer.style.opacity = local ? '0.5' : '1';
+}
+
+async function loadProxyMode() {
+    try {
+        const settings = await api('/api/settings');
+        const local = (settings.PROXY_MODE || 'list').toLowerCase() === 'local';
+        proxyLocalToggle.checked = local;
+        applyProxyModeUI(local);
+    } catch (err) { /* leave default */ }
+}
+
+proxyLocalToggle.addEventListener('change', async () => {
+    const local = proxyLocalToggle.checked;
+    applyProxyModeUI(local);
+    try {
+        await api('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ PROXY_MODE: local ? 'local' : 'list' })
+        });
+        toast(local ? 'Local connection mode on (no proxy)' : 'Proxy list mode on', 'success');
+    } catch (err) {
+        toast(`Failed to save mode: ${err.message}`, 'error');
+    }
+});
 
 // ---------- Proxies ----------
 const proxyInput = document.getElementById('proxy-input');
@@ -350,15 +388,35 @@ function renderAccounts() {
         tdStatus.appendChild(statusSpan);
 
         const tdAction = document.createElement('td');
+        const loginBtn = document.createElement('button');
+        loginBtn.className = 'btn btn-secondary btn-sm';
+        loginBtn.textContent = 'Login';
+        loginBtn.title = 'Open Weavy/Figma login in a side window and copy this email';
+        loginBtn.addEventListener('click', () => loginAccount(acc));
         const delBtn = document.createElement('button');
         delBtn.className = 'btn btn-danger btn-sm';
         delBtn.textContent = 'Delete';
         delBtn.addEventListener('click', () => deleteAccount(acc.EMAIL));
-        tdAction.appendChild(delBtn);
+        tdAction.append(loginBtn, delBtn);
 
         tr.append(tdEmail, tdPassword, tdStatus, tdAction);
         accountsBody.appendChild(tr);
     });
+}
+
+// Figma & Weavy forbid being embedded in an iframe (X-Frame-Options / CSP
+// frame-ancestors), so the login can't render inside our page — open it in a
+// window docked to the right of the screen and copy the email to paste.
+function loginAccount(acc) {
+    const width = Math.min(640, Math.floor(window.screen.availWidth / 2));
+    const left = Math.max(0, window.screen.availWidth - width);
+    window.open('https://app.weavy.ai/signin', 'weavyLogin',
+        `width=${width},height=${window.screen.availHeight},left=${left},top=0`);
+    if (acc.EMAIL) {
+        navigator.clipboard.writeText(acc.EMAIL)
+            .then(() => toast('Login opened — email copied. Paste it, then click the password cell to copy the password.', 'success'))
+            .catch(() => toast('Login opened — copy the email/password from the row.', 'info'));
+    }
 }
 
 async function deleteAccount(email) {
