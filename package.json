@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "electron": "electron .",
-    "test": "node --test test/*.test.js scraper/test/*.test.js"
+    "test": "node --test test/*.test.js scraper/test/*.test.js",
+    "dist": "electron-builder"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +31,34 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "electron": "^42.4.1"
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.figmabot.desktop",
+    "productName": "FigmaBot",
+    "directories": { "output": "dist" },
+    "files": [
+        "electron-main.js",
+        "server.js",
+        "bot.js",
+        "paths.js",
+        "childNode.js",
+        "proxyCheck.js",
+        "check_inbox.js",
+        "scraper/**/*",
+        "public/**/*",
+        "node_modules/**/*",
+        "!scraper/test/**",
+        "!test/**",
+        "!**/*.test.js",
+        "!errors/**",
+        "!downloads/**"
+    ],
+    "extraResources": [
+        { "from": "pw-browsers", "to": "ms-playwright" }
+    ],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
   }
 }
