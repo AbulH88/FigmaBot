@@ -2,10 +2,12 @@
   "name": "figmabot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test scraper/test/*.test.js"
+    "electron": "electron .",
+    "test": "node --test test/*.test.js scraper/test/*.test.js",
+    "dist": "electron-builder"
   },
   "keywords": [],
   "author": "",
@@ -22,10 +24,42 @@
     "imap-simple": "^5.1.0",
     "mailparser": "^3.9.9",
     "multer": "^2.1.1",
-    "playwright": "^1.60.0",
+    "playwright": "1.60.0",
     "playwright-extra": "^4.3.6",
     "proxy-agent": "^8.0.2",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.figmabot.desktop",
+    "productName": "FigmaBot",
+    "directories": { "output": "dist" },
+    "files": [
+        "electron-main.js",
+        "server.js",
+        "bot.js",
+        "paths.js",
+        "childNode.js",
+        "proxyCheck.js",
+        "check_inbox.js",
+        "scraper/**/*",
+        "public/**/*",
+        "node_modules/**/*",
+        "!scraper/test/**",
+        "!test/**",
+        "!**/*.test.js",
+        "!errors/**",
+        "!downloads/**",
+        "!scraper/config.json"
+    ],
+    "extraResources": [
+        { "from": "pw-browsers", "to": "ms-playwright" }
+    ],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
   }
 }

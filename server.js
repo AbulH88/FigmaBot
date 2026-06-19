@@ -1,15 +1,17 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('./paths').envPath });
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const { parseProxyUrl, validateProxy } = require('./proxyCheck');
 const multer = require('multer');
 const scraperTokens = require('./scraper/tokens');
 const scraperConfig = require('./scraper/config');
+const paths = require('./paths');
+const { nodeCommand } = require('./childNode');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,7 +49,7 @@ let botProcess = null;
 
 // Endpoints for Settings
 app.get('/api/settings', (req, res) => {
-    const envContent = fs.existsSync('.env') ? fs.readFileSync('.env', 'utf8') : '';
+    const envContent = fs.existsSync(paths.envPath) ? fs.readFileSync(paths.envPath, 'utf8') : '';
     const settings = {};
     envContent.split('\n').forEach(line => {
         if (line.includes('=')) {
@@ -60,7 +62,7 @@ app.get('/api/settings', (req, res) => {
 
 app.post('/api/settings', (req, res) => {
     const settings = req.body;
-    let envContent = fs.existsSync('.env') ? fs.readFileSync('.env', 'utf8') : '';
+    let envContent = fs.existsSync(paths.envPath) ? fs.readFileSync(paths.envPath, 'utf8') : '';
 
     for (const [key, value] of Object.entries(settings)) {
         const cleanKey = String(key).trim();
@@ -76,14 +78,14 @@ app.post('/api/settings', (req, res) => {
             envContent += `\n${cleanKey}=${cleanValue}`;
         }
     }
-    fs.writeFileSync('.env', envContent.trim() + '\n');
-    require('dotenv').config({ override: true }); // Reload env (override needed to refresh already-loaded values)
+    fs.writeFileSync(paths.envPath, envContent.trim() + '\n');
+    require('dotenv').config({ path: paths.envPath, override: true }); // Reload env (override needed to refresh already-loaded values)
     res.json({ success: true });
 });
 
 // Endpoints for Proxies
 app.get('/api/proxies', (req, res) => {
-    const proxies = fs.existsSync('proxies.txt') ? fs.readFileSync('proxies.txt', 'utf8').split('\n').filter(p => p.trim()) : [];
+    const proxies = fs.existsSync(paths.proxiesTxt) ? fs.readFileSync(paths.proxiesTxt, 'utf8').split('\n').filter(p => p.trim()) : [];
     res.json(proxies);
 });
 
@@ -95,12 +97,12 @@ app.post('/api/proxies', upload.single('proxyFile'), (req, res) => {
     } else if (req.body.proxies) {
         newProxies = req.body.proxies.split('\n').map(p => p.trim()).filter(p => p);
     }
-    fs.writeFileSync('proxies.txt', newProxies.join('\n'));
+    fs.writeFileSync(paths.proxiesTxt, newProxies.join('\n'));
     res.json({ success: true, count: newProxies.length });
 });
 
 app.delete('/api/proxies', (req, res) => {
-    fs.writeFileSync('proxies.txt', '');
+    fs.writeFileSync(paths.proxiesTxt, '');
     res.json({ success: true });
 });
 
@@ -123,7 +125,11 @@ app.post('/api/check-proxy', async (req, res) => {
 // Spawn bot.js and wire its output to the dashboard. detached on POSIX puts
 // the bot in its own process group so stop can kill the whole tree.
 function spawnBot() {
-    botProcess = spawn('node', ['bot.js'], { detached: process.platform !== 'win32' });
+    const nc = nodeCommand();
+    botProcess = spawn(nc.command, [path.join(__dirname, 'bot.js')], {
+        detached: process.platform !== 'win32',
+        env: { ...process.env, ...nc.extraEnv }
+    });
     botProcess.stdout.on('data', (data) => io.emit('log', data.toString()));
     botProcess.stderr.on('data', (data) => io.emit('log', `[ERROR] ${data.toString()}`));
     botProcess.on('close', (code) => {
@@ -151,8 +157,8 @@ app.post('/api/bot/start', async (req, res) => {
     // The bot must never run on the machine's real IP, so refuse to start
     // unless at least one proxy actually works. Keep only the good ones.
     let proxies = [];
-    if (fs.existsSync('proxies.txt')) {
-        proxies = fs.readFileSync('proxies.txt', 'utf8').split('\n').map(p => p.trim()).filter(Boolean);
+    if (fs.existsSync(paths.proxiesTxt)) {
+        proxies = fs.readFileSync(paths.proxiesTxt, 'utf8').split('\n').map(p => p.trim()).filter(Boolean);
     }
     if (proxies.length === 0) {
         return res.json({ success: false, error: 'No proxies loaded — add at least one working proxy before starting.' });
@@ -184,7 +190,7 @@ app.post('/api/bot/start', async (req, res) => {
     }
 
     // Persist only the validated proxies so the bot runs on known-good IPs.
-    fs.writeFileSync('proxies.txt', good.map(r => r.line).join('\n') + '\n');
+    fs.writeFileSync(paths.proxiesTxt, good.map(r => r.line).join('\n') + '\n');
     const want = parseInt(process.env.ACCOUNTS_TO_CREATE) || 1;
     if (good.length < want) {
         io.emit('log', `[!] Only ${good.length} working prox${good.length === 1 ? 'y' : 'ies'} for ${want} accounts — IPs will be reused (higher flag risk).\n`);
@@ -246,10 +252,10 @@ function parseCsvLine(line) {
 }
 
 app.get('/api/accounts', (req, res) => {
-    if (!fs.existsSync('accounts.csv')) {
+    if (!fs.existsSync(paths.accountsCsv)) {
         return res.json([]);
     }
-    const content = fs.readFileSync('accounts.csv', 'utf8').trim();
+    const content = fs.readFileSync(paths.accountsCsv, 'utf8').trim();
     if (!content) return res.json([]);
 
     const lines = content.split(/\r?\n/);
@@ -265,15 +271,15 @@ app.get('/api/accounts', (req, res) => {
 
 app.delete('/api/accounts', (req, res) => {
     const { email } = req.body;
-    if (!fs.existsSync('accounts.csv')) return res.json({ success: false });
+    if (!fs.existsSync(paths.accountsCsv)) return res.json({ success: false });
 
-    let lines = fs.readFileSync('accounts.csv', 'utf8').trim().split(/\r?\n/);
+    let lines = fs.readFileSync(paths.accountsCsv, 'utf8').trim().split(/\r?\n/);
     const newLines = lines.filter((line, idx) => {
         if (idx === 0) return true; // keep header
         return parseCsvLine(line)[0] !== email;
     });
 
-    fs.writeFileSync('accounts.csv', newLines.join('\n') + '\n');
+    fs.writeFileSync(paths.accountsCsv, newLines.join('\n') + '\n');
     res.json({ success: true });
 });
 
@@ -337,8 +343,10 @@ app.post('/api/scraper/run', (req, res) => {
         return res.json({ success: false, error: 'Scraper is already running.' });
     }
     scraperLastRun = { startedAt: new Date().toISOString(), finishedAt: null, code: null };
-    scraperProcess = spawn('node', [path.join(__dirname, 'scraper', 'run.js')], {
-        detached: process.platform !== 'win32'
+    const nc = nodeCommand();
+    scraperProcess = spawn(nc.command, [path.join(__dirname, 'scraper', 'run.js')], {
+        detached: process.platform !== 'win32',
+        env: { ...process.env, ...nc.extraEnv }
     });
     scraperProcess.stdout.on('data', d => io.emit('scraperLog', d.toString()));
     scraperProcess.stderr.on('data', d => io.emit('scraperLog', `[ERROR] ${d.toString()}`));
@@ -358,7 +366,7 @@ app.get('/api/scraper/status', (req, res) => {
 });
 
 app.get('/api/scraper/downloads', (req, res) => {
-    const base = path.join(__dirname, 'downloads');
+    const base = paths.downloadsDir;
     const out = [];
     if (fs.existsSync(base)) {
         for (const niche of fs.readdirSync(base)) {
@@ -391,12 +399,35 @@ io.on('connection', (socket) => {
     socket.emit('scraperStatus', !!scraperProcess);
 });
 
-const PORT = process.env.PORT || 3000;
-// Localhost-only by default; set HOST=0.0.0.0 (and DASHBOARD_PASSWORD) to expose on the network
-const HOST = process.env.HOST || '127.0.0.1';
-server.listen(PORT, HOST, () => {
-    console.log(`Web UI running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-    if (HOST === '0.0.0.0' && !DASHBOARD_PASSWORD) {
-        console.log('[!] WARNING: exposed on the network without DASHBOARD_PASSWORD set.');
+function stopChildren() {
+    for (const child of [botProcess, scraperProcess]) {
+        if (!child) continue;
+        if (process.platform === 'win32') {
+            // Synchronous so before-quit blocks until the whole tree (incl. Chromium) is reaped
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+        } else {
+            try { process.kill(-child.pid, 'SIGTERM'); } catch (e) { child.kill('SIGTERM'); }
+        }
     }
-});
+    botProcess = null;
+    scraperProcess = null;
+}
+
+function start({ port = process.env.PORT || 3000, host = process.env.HOST || '127.0.0.1' } = {}) {
+    paths.ensureDirs();
+    return new Promise((resolve) => {
+        server.listen(port, host, () => {
+            const actual = server.address().port;
+            console.log(`Web UI running on http://${host === '0.0.0.0' ? 'localhost' : host}:${actual}`);
+            if (host === '0.0.0.0' && !DASHBOARD_PASSWORD) {
+                console.log('[!] WARNING: exposed on the network without DASHBOARD_PASSWORD set.');
+            }
+            resolve(actual);
+        });
+    });
+}
+
+// Run directly (dev): `npm start`. Required by Electron: it calls start().
+if (require.main === module) start();
+
+module.exports = { start, stopChildren };

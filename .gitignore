@@ -27,4 +27,9 @@ Thumbs.db
 # Reel scraper secrets & runtime data
 scraper/apify_tokens.json
 scraper/state/
+scraper/config.json
 downloads/
+
+# Electron build artifacts and bundled browser
+dist/
+pw-browsers/

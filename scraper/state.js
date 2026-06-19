@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const STATE_DIR = path.join(__dirname, 'state');
+const STATE_DIR = require('../paths').stateDir;
 const DOWNLOADED_PATH = path.join(STATE_DIR, 'downloaded.json');
 const LOCK_PATH = path.join(STATE_DIR, 'run.lock');
 const LOCK_STALE_MS = 60 * 60 * 1000; // a crashed run's lock expires after 1h

@@ -1,4 +1,5 @@
-require('dotenv').config();
+const paths = require('./paths');
+require('dotenv').config({ path: paths.envPath });
 const { chromium } = require('playwright');
 const { newInjectedContext } = require('fingerprint-injector');
 const axios = require('axios');
@@ -9,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseProxyUrl, proxyUrlToPlaywright, validateProxy } = require('./proxyCheck');
 
-const ACCOUNTS_CSV = 'accounts.csv';
+const ACCOUNTS_CSV = paths.accountsCsv;
 const CSV_HEADER = 'EMAIL,PASSWORD,STATUS\n';
 
 function csvEscape(value) {
@@ -100,8 +101,8 @@ async function waitForFigmaVerificationEmail(emailAddress, password, timeoutMs =
 async function run() {
     const numAccounts = parseInt(process.env.ACCOUNTS_TO_CREATE) || 1;
     let proxies = [];
-    if (fs.existsSync('proxies.txt')) {
-        proxies = fs.readFileSync('proxies.txt', 'utf8').split('\n').map(p => p.trim()).filter(p => p);
+    if (fs.existsSync(paths.proxiesTxt)) {
+        proxies = fs.readFileSync(paths.proxiesTxt, 'utf8').split('\n').map(p => p.trim()).filter(p => p);
     }
     console.log(`[+] Loaded ${proxies.length} proxies.`);
 
@@ -229,7 +230,7 @@ async function run() {
             appendAccountRecord({ email: email || prefix, password, status: `Failed: ${cleanError}` });
             if (context && page) {
                 const dateStamp = new Date().toISOString().split('T')[0];
-                const errDir = path.join(__dirname, 'errors', dateStamp);
+                const errDir = path.join(paths.errorsDir, dateStamp);
                 if (!fs.existsSync(errDir)) fs.mkdirSync(errDir, { recursive: true });
                 await page.screenshot({ path: path.join(errDir, `error_${prefix}_${Date.now()}.png`), fullPage: true }).catch(()=>{});
             }

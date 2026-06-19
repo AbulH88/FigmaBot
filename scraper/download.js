@@ -4,7 +4,7 @@ const path = require('path');
 const axios = require('axios');
 const { pipeline } = require('stream/promises');
 
-const DOWNLOADS_DIR = path.join(__dirname, '..', 'downloads');
+const DOWNLOADS_DIR = require('../paths').downloadsDir;
 
 function sanitize(name) {
     return String(name).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60) || 'unknown';
