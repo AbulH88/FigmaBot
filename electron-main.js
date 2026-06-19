@@ -41,7 +41,10 @@ async function createWindow() {
     win.on('closed', () => { win = null; });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(createWindow).catch(err => {
+    dialog.showErrorBox('FigmaBot failed to start', err && err.message ? err.message : String(err));
+    app.quit();
+});
 
 app.on('before-quit', () => {
     try { require('./server').stopChildren(); } catch (e) { /* server may not have started */ }

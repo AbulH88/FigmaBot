@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const { parseProxyUrl, validateProxy } = require('./proxyCheck');
 const multer = require('multer');
@@ -403,7 +403,8 @@ function stopChildren() {
     for (const child of [botProcess, scraperProcess]) {
         if (!child) continue;
         if (process.platform === 'win32') {
-            spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+            // Synchronous so before-quit blocks until the whole tree (incl. Chromium) is reaped
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
         } else {
             try { process.kill(-child.pid, 'SIGTERM'); } catch (e) { child.kill('SIGTERM'); }
         }
