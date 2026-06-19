@@ -28,3 +28,7 @@ Thumbs.db
 scraper/apify_tokens.json
 scraper/state/
 downloads/
+
+# Electron build artifacts and bundled browser
+dist/
+pw-browsers/
